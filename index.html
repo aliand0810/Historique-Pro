@@ -286,16 +286,43 @@
                     </div>
                 </div>
 
-                <!-- ══ AGENDA DÉTAILLÉ (ACCORDÉON) — MOIS/SEMAINE → JOUR → TICKETS ═══ -->
+                <!-- ══ AGENDA DÉTAILLÉ — SÉLECTEUR (MOIS/SEMAINE + JOURS) À GAUCHE, TABLEAU DE DÉTAIL À DROITE ═══ -->
                 <div style="margin-bottom:14px;padding:14px 16px;background:var(--bg-card,#fff);border-radius:12px;border:1.5px solid var(--border-color,#e0e0e0);">
-                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
                         <div style="font-size:0.74rem;font-weight:800;color:var(--text-muted,#888);text-transform:uppercase;letter-spacing:0.5px;">📖 Agenda détaillé</div>
                         <div style="display:flex;gap:3px;background:var(--bg-body,#f4f7f6);border-radius:20px;padding:3px;">
                             <button id="hist-agacc-mode-month" onclick="_histAgAccSetMode('month')" style="padding:5px 12px;border:none;border-radius:16px;font-size:0.72rem;font-weight:700;cursor:pointer;background:#3498db;color:#fff;">Par mois</button>
                             <button id="hist-agacc-mode-week" onclick="_histAgAccSetMode('week')" style="padding:5px 12px;border:none;border-radius:16px;font-size:0.72rem;font-weight:700;cursor:pointer;background:transparent;color:var(--text-main,#2c3e50);">Par semaine</button>
                         </div>
                     </div>
-                    <div id="hist-agacc-list"></div>
+                    <div style="display:grid;grid-template-columns:minmax(200px,260px) 1fr;gap:14px;align-items:start;">
+                        <!-- ── Colonne gauche : sélection (menu déroulant de la période + liste des jours) ── -->
+                        <div>
+                            <select id="hist-agacc-period-select" onchange="_histAgAccOnPeriodChange(this.value)"
+                                style="width:100%;padding:8px 10px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:8px;font-size:0.82rem;font-weight:700;background:var(--input-bg,#fff);color:var(--text-main,#2c3e50);margin-bottom:10px;">
+                            </select>
+                            <div id="hist-agacc-period-total" style="font-size:0.78rem;font-weight:800;color:#2980b9;margin-bottom:8px;"></div>
+                            <div id="hist-agacc-days-list" style="display:flex;flex-direction:column;gap:4px;max-height:360px;overflow-y:auto;"></div>
+                        </div>
+                        <!-- ── Colonne droite : tableau de détail du jour sélectionné ── -->
+                        <div style="min-width:0;">
+                            <div id="hist-agacc-table-title" style="font-size:0.82rem;font-weight:800;color:var(--text-main,#2c3e50);margin-bottom:8px;">—</div>
+                            <div style="overflow-x:auto;border:1.5px solid var(--border-color,#e0e0e0);border-radius:10px;">
+                                <table style="width:100%;border-collapse:collapse;font-size:0.79rem;">
+                                    <thead>
+                                        <tr style="background:var(--bg-body,#f4f7f6);">
+                                            <th style="text-align:left;padding:8px 10px;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.3px;color:var(--text-muted,#888);">Ticket</th>
+                                            <th style="text-align:left;padding:8px 10px;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.3px;color:var(--text-muted,#888);">Heure</th>
+                                            <th style="text-align:left;padding:8px 10px;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.3px;color:var(--text-muted,#888);">Mode</th>
+                                            <th style="text-align:left;padding:8px 10px;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.3px;color:var(--text-muted,#888);">Client</th>
+                                            <th style="text-align:right;padding:8px 10px;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.3px;color:var(--text-muted,#888);">Montant</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="hist-agacc-table-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ══ STATS RAPIDES CLIQUABLES ════════════════════════════════ -->
@@ -901,18 +928,20 @@ function _histAgendaPreset(days, btnEl) {
     _histAgendaRender(true);
 }
 
-// ===== AGENDA DÉTAILLÉ (ACCORDÉON) — VUE PAR MOIS/SEMAINE → JOUR → TICKETS =====
-// Complémentaire du curseur ci-dessus : ici on parcourt l'historique par blocs dépliables
-// (un mois ou une semaine à la fois), chaque bloc affichant son CA total, qui se déploie pour
-// lister les jours, puis chaque jour se déploie à son tour sur la liste de ses ventes.
+// ===== AGENDA DÉTAILLÉ — MENU DÉROULANT (MOIS/SEMAINE) + LISTE DE JOURS À GAUCHE,
+//       TABLEAU DE DÉTAIL DES VENTES DU JOUR SÉLECTIONNÉ À DROITE =====
+// Complémentaire du curseur ci-dessus. On choisit une période (mois ou semaine) dans le menu
+// déroulant, ce qui liste ses jours à gauche ; en cliquant un jour, le tableau à droite affiche
+// le détail (ticket par ticket) des ventes de ce jour précis.
 window._histAgAccMode = 'month'; // 'month' | 'week'
-window._histAgAccOpenPeriods = {};
-window._histAgAccOpenDays = {};
+window._histAgAccPeriodKeySel = null;
+window._histAgAccDayKeySel = null;
+window._histAgAccData = null; // { periods: {pk: {days:{dk:{sales,ca}}, ca}} } — recalculé par _histAgAccRender()
 
 function _histAgAccSetMode(mode) {
     window._histAgAccMode = mode;
-    window._histAgAccOpenPeriods = {};
-    window._histAgAccOpenDays = {};
+    window._histAgAccPeriodKeySel = null;
+    window._histAgAccDayKeySel = null;
     const mBtn = document.getElementById('hist-agacc-mode-month');
     const wBtn = document.getElementById('hist-agacc-mode-week');
     if (mBtn) { mBtn.style.background = mode==='month' ? '#3498db' : 'transparent'; mBtn.style.color = mode==='month' ? '#fff' : 'var(--text-main,#2c3e50)'; }
@@ -947,25 +976,14 @@ function _histAgAccDayLabel(dayKey) {
     return _histAgAccCap(new Date(dayKey + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }));
 }
 
-function _histAgAccTogglePeriod(pk) {
-    window._histAgAccOpenPeriods[pk] = !window._histAgAccOpenPeriods[pk];
-    _histAgAccRender();
-}
-
-function _histAgAccToggleDay(dk) {
-    window._histAgAccOpenDays[dk] = !window._histAgAccOpenDays[dk];
-    _histAgAccRender();
-}
-
+// Reconstruit les données groupées (jour → période) depuis covo_sales_history, puis redessine
+// le menu déroulant, la liste de jours et le tableau, en conservant la période/le jour déjà
+// sélectionnés quand ils existent toujours (sinon on retombe sur la période/le jour le plus récent).
 function _histAgAccRender() {
-    const wrap = document.getElementById('hist-agacc-list');
-    if (!wrap) return;
+    const select = document.getElementById('hist-agacc-period-select');
+    if (!select) return;
     let sales = [];
     try { sales = JSON.parse(localStorage.getItem('covo_sales_history')) || []; } catch(e) {}
-    if (!sales.length) {
-        wrap.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted,#999);font-size:0.82rem;">Aucune vente enregistrée.</div>';
-        return;
-    }
 
     const days = {};
     sales.forEach(function(s) {
@@ -981,52 +999,104 @@ function _histAgAccRender() {
         periods[pk].days[dk] = days[dk];
         periods[pk].ca += days[dk].ca;
     });
+    window._histAgAccData = periods;
 
-    let html = '';
-    Object.keys(periods).sort().reverse().forEach(function(pk) {
-        const period = periods[pk];
-        const isOpen = !!window._histAgAccOpenPeriods[pk];
-        html += '<div style="border:1.5px solid var(--border-color,#e0e0e0);border-radius:10px;margin-bottom:8px;overflow:hidden;">'
-            + '<div onclick="_histAgAccTogglePeriod(\'' + pk + '\')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;background:' + (isOpen ? 'rgba(52,152,219,0.07)' : 'var(--bg-card,#fff)') + ';">'
-            +   '<div style="display:flex;align-items:center;gap:8px;">'
-            +     '<span style="font-size:0.72rem;display:inline-block;transition:transform .15s;transform:rotate(' + (isOpen ? 90 : 0) + 'deg);">▶</span>'
-            +     '<span style="font-weight:800;font-size:0.85rem;color:var(--text-main,#2c3e50);">' + _histEscape(_histAgAccPeriodLabel(pk)) + '</span>'
-            +   '</div>'
-            +   '<span style="font-weight:800;font-size:0.85rem;color:#2980b9;">' + period.ca.toFixed(2) + ' €</span>'
-            + '</div>';
-        if (isOpen) {
-            html += '<div style="padding:4px 10px 10px;">';
-            Object.keys(period.days).sort().reverse().forEach(function(dk) {
-                const day = period.days[dk];
-                const isDayOpen = !!window._histAgAccOpenDays[dk];
-                html += '<div style="border-top:1px solid var(--border-color,#eee);">'
-                    + '<div onclick="_histAgAccToggleDay(\'' + dk + '\')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 6px;cursor:pointer;">'
-                    +   '<div style="display:flex;align-items:center;gap:7px;">'
-                    +     '<span style="font-size:0.66rem;color:var(--text-muted,#999);display:inline-block;transition:transform .15s;transform:rotate(' + (isDayOpen ? 90 : 0) + 'deg);">▶</span>'
-                    +     '<span style="font-size:0.8rem;color:var(--text-main,#2c3e50);">' + _histEscape(_histAgAccDayLabel(dk)) + '</span>'
-                    +   '</div>'
-                    +   '<span style="font-size:0.8rem;font-weight:700;color:#059669;">' + day.ca.toFixed(2) + ' €</span>'
-                    + '</div>';
-                if (isDayOpen) {
-                    html += '<div style="padding:2px 10px 10px 26px;display:flex;flex-direction:column;gap:5px;">';
-                    day.sales.slice().sort(function(a, b){ return new Date(a.date) - new Date(b.date); }).forEach(function(s, i) {
-                        const idx = (window._sortedSalesHistory || []).findIndex(function(x){ return x.id === s.id; });
-                        const clickable = idx >= 0;
-                        html += '<div ' + (clickable ? ('onclick="event.stopPropagation();showTicketFromHistory(' + idx + ')" title="Voir le ticket"') : '')
-                            + ' style="display:flex;justify-content:space-between;gap:8px;font-size:0.78rem;padding:5px 8px;background:var(--bg-body,#f4f7f6);border-radius:7px;' + (clickable ? 'cursor:pointer;' : '') + (s.cancelled ? 'opacity:0.6;text-decoration:line-through;' : '') + '">'
-                            +   '<span>🧾 Vente ' + (i + 1) + (s.cancelled ? ' (annulée)' : '') + '</span>'
-                            +   '<span style="font-weight:700;">' + parseFloat(s.total || 0).toFixed(2) + ' €</span>'
-                            + '</div>';
-                    });
-                    html += '</div>';
-                }
-                html += '</div>';
-            });
-            html += '</div>';
-        }
-        html += '</div>';
-    });
-    wrap.innerHTML = html;
+    const periodKeys = Object.keys(periods).sort().reverse();
+    if (!periodKeys.length) {
+        select.innerHTML = '<option value="">Aucune vente enregistrée</option>';
+        document.getElementById('hist-agacc-period-total').textContent = '';
+        document.getElementById('hist-agacc-days-list').innerHTML = '';
+        _histAgAccRenderTable(null);
+        return;
+    }
+    if (!window._histAgAccPeriodKeySel || !periods[window._histAgAccPeriodKeySel]) {
+        window._histAgAccPeriodKeySel = periodKeys[0];
+        window._histAgAccDayKeySel = null;
+    }
+    select.innerHTML = periodKeys.map(function(pk) {
+        const sel = pk === window._histAgAccPeriodKeySel ? ' selected' : '';
+        return '<option value="' + pk + '"' + sel + '>' + _histEscape(_histAgAccPeriodLabel(pk)) + ' — ' + periods[pk].ca.toFixed(2) + ' €</option>';
+    }).join('');
+
+    _histAgAccRenderDaysList();
+}
+
+// Menu déroulant changé par l'utilisateur : on retombe sur le jour le plus récent de la
+// nouvelle période sélectionnée (l'ancien jour sélectionné n'a aucune raison d'exister ici).
+function _histAgAccOnPeriodChange(pk) {
+    window._histAgAccPeriodKeySel = pk;
+    window._histAgAccDayKeySel = null;
+    _histAgAccRenderDaysList();
+}
+
+function _histAgAccRenderDaysList() {
+    const periods = window._histAgAccData || {};
+    const period = periods[window._histAgAccPeriodKeySel];
+    const totalEl = document.getElementById('hist-agacc-period-total');
+    const listEl = document.getElementById('hist-agacc-days-list');
+    if (!period) { if (totalEl) totalEl.textContent = ''; if (listEl) listEl.innerHTML = ''; _histAgAccRenderTable(null); return; }
+    if (totalEl) totalEl.textContent = '💰 Total période : ' + period.ca.toFixed(2) + ' €';
+
+    const dayKeys = Object.keys(period.days).sort().reverse();
+    if (!window._histAgAccDayKeySel || !period.days[window._histAgAccDayKeySel]) {
+        window._histAgAccDayKeySel = dayKeys[0] || null;
+    }
+    if (listEl) {
+        listEl.innerHTML = dayKeys.map(function(dk) {
+            const day = period.days[dk];
+            const isSel = dk === window._histAgAccDayKeySel;
+            return '<div onclick="_histAgAccSelectDay(\'' + dk + '\')" style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 10px;border-radius:8px;cursor:pointer;background:' + (isSel ? 'rgba(52,152,219,0.12)' : 'transparent') + ';border:1.5px solid ' + (isSel ? '#3498db' : 'transparent') + ';">'
+                + '<span style="font-size:0.78rem;font-weight:' + (isSel ? '800' : '600') + ';color:var(--text-main,#2c3e50);">' + _histEscape(new Date(dk + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' })) + '</span>'
+                + '<span style="font-size:0.76rem;font-weight:700;color:#059669;">' + day.ca.toFixed(2) + ' €</span>'
+                + '</div>';
+        }).join('');
+    }
+    _histAgAccRenderTable(window._histAgAccDayKeySel);
+}
+
+function _histAgAccSelectDay(dk) {
+    window._histAgAccDayKeySel = dk;
+    _histAgAccRenderDaysList();
+}
+
+// Dessine le tableau de détail (ticket par ticket) du jour actuellement sélectionné.
+function _histAgAccRenderTable(dayKey) {
+    const titleEl = document.getElementById('hist-agacc-table-title');
+    const bodyEl = document.getElementById('hist-agacc-table-body');
+    if (!bodyEl) return;
+    const periods = window._histAgAccData || {};
+    const period = periods[window._histAgAccPeriodKeySel];
+    const day = (dayKey && period) ? period.days[dayKey] : null;
+    if (!day) {
+        if (titleEl) titleEl.textContent = '—';
+        bodyEl.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted,#999);">Sélectionnez un jour à gauche.</td></tr>';
+        return;
+    }
+    if (titleEl) titleEl.textContent = '🗓️ ' + _histAgAccDayLabel(dayKey) + ' — ' + day.ca.toFixed(2) + ' €';
+    const methodLabelOf = function(s) {
+        return s.method==='cb' ? '💳 Carte'
+            : s.method==='cash' ? '💶 Espèces'
+            : s.method==='ticket' ? '🎟️ Ticket resto'
+            : s.method==='credit' ? '📒 Crédit'
+            : s.method==='echel' ? '📅 Échelonné'
+            : s.method==='points' ? '🎁 Points'
+            : '💳💶 Mixte';
+    };
+    const rows = day.sales.slice().sort(function(a, b){ return new Date(b.date) - new Date(a.date); }).map(function(s) {
+        const idx = (window._sortedSalesHistory || []).findIndex(function(x){ return x.id === s.id; });
+        const clickable = idx >= 0;
+        const heure = new Date(s.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const client = s.creditCustomerName ? ('📒 ' + _histEscape(s.creditCustomerName)) : (s.loyaltyCustomerName ? ('🎁 ' + _histEscape(s.loyaltyCustomerName)) : '—');
+        const rowStyle = (s.cancelled ? 'opacity:0.55;text-decoration:line-through;' : '') + (clickable ? 'cursor:pointer;' : '');
+        return '<tr ' + (clickable ? ('onclick="showTicketFromHistory(' + idx + ')" title="Voir le ticket"') : '') + ' style="' + rowStyle + 'border-top:1px solid var(--border-color,#eee);">'
+            + '<td style="padding:7px 10px;">🧾 #' + s.id + (s.cancelled ? ' 🚫' : '') + '</td>'
+            + '<td style="padding:7px 10px;">' + heure + '</td>'
+            + '<td style="padding:7px 10px;white-space:nowrap;">' + methodLabelOf(s) + '</td>'
+            + '<td style="padding:7px 10px;">' + client + '</td>'
+            + '<td style="padding:7px 10px;text-align:right;font-weight:700;">' + parseFloat(s.total || 0).toFixed(2) + ' €</td>'
+            + '</tr>';
+    }).join('');
+    bodyEl.innerHTML = rows || '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted,#999);">Aucune vente ce jour.</td></tr>';
 }
 
 // ===== HISTORIQUE VENTES — KPI + GRAPHIQUES =====
