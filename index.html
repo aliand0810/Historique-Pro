@@ -286,6 +286,18 @@
                     </div>
                 </div>
 
+                <!-- ══ AGENDA DÉTAILLÉ (ACCORDÉON) — MOIS/SEMAINE → JOUR → TICKETS ═══ -->
+                <div style="margin-bottom:14px;padding:14px 16px;background:var(--bg-card,#fff);border-radius:12px;border:1.5px solid var(--border-color,#e0e0e0);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                        <div style="font-size:0.74rem;font-weight:800;color:var(--text-muted,#888);text-transform:uppercase;letter-spacing:0.5px;">📖 Agenda détaillé</div>
+                        <div style="display:flex;gap:3px;background:var(--bg-body,#f4f7f6);border-radius:20px;padding:3px;">
+                            <button id="hist-agacc-mode-month" onclick="_histAgAccSetMode('month')" style="padding:5px 12px;border:none;border-radius:16px;font-size:0.72rem;font-weight:700;cursor:pointer;background:#3498db;color:#fff;">Par mois</button>
+                            <button id="hist-agacc-mode-week" onclick="_histAgAccSetMode('week')" style="padding:5px 12px;border:none;border-radius:16px;font-size:0.72rem;font-weight:700;cursor:pointer;background:transparent;color:var(--text-main,#2c3e50);">Par semaine</button>
+                        </div>
+                    </div>
+                    <div id="hist-agacc-list"></div>
+                </div>
+
                 <!-- ══ STATS RAPIDES CLIQUABLES ════════════════════════════════ -->
                 <div id="cashier-hist-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;"></div>
 
@@ -887,6 +899,134 @@ function _histAgendaPreset(days, btnEl) {
         if (chip) chip.classList.add('active');
     }
     _histAgendaRender(true);
+}
+
+// ===== AGENDA DÉTAILLÉ (ACCORDÉON) — VUE PAR MOIS/SEMAINE → JOUR → TICKETS =====
+// Complémentaire du curseur ci-dessus : ici on parcourt l'historique par blocs dépliables
+// (un mois ou une semaine à la fois), chaque bloc affichant son CA total, qui se déploie pour
+// lister les jours, puis chaque jour se déploie à son tour sur la liste de ses ventes.
+window._histAgAccMode = 'month'; // 'month' | 'week'
+window._histAgAccOpenPeriods = {};
+window._histAgAccOpenDays = {};
+
+function _histAgAccSetMode(mode) {
+    window._histAgAccMode = mode;
+    window._histAgAccOpenPeriods = {};
+    window._histAgAccOpenDays = {};
+    const mBtn = document.getElementById('hist-agacc-mode-month');
+    const wBtn = document.getElementById('hist-agacc-mode-week');
+    if (mBtn) { mBtn.style.background = mode==='month' ? '#3498db' : 'transparent'; mBtn.style.color = mode==='month' ? '#fff' : 'var(--text-main,#2c3e50)'; }
+    if (wBtn) { wBtn.style.background = mode==='week' ? '#3498db' : 'transparent'; wBtn.style.color = mode==='week' ? '#fff' : 'var(--text-main,#2c3e50)'; }
+    _histAgAccRender();
+}
+
+function _histAgAccWeekKey(isoDateTime) {
+    const dt = new Date(isoDateTime); dt.setHours(0, 0, 0, 0);
+    const dow = (dt.getDay() + 6) % 7; // 0 = lundi
+    dt.setDate(dt.getDate() - dow);
+    return _histDateKey(dt);
+}
+
+function _histAgAccPeriodKey(dayKey) {
+    return window._histAgAccMode === 'week' ? _histAgAccWeekKey(dayKey + 'T00:00:00') : dayKey.substring(0, 7);
+}
+
+function _histAgAccCap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+function _histAgAccPeriodLabel(periodKey) {
+    if (window._histAgAccMode === 'week') {
+        const start = new Date(periodKey + 'T00:00:00');
+        const end = new Date(start); end.setDate(start.getDate() + 6);
+        const fmt = function(d){ return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }); };
+        return 'Semaine du ' + fmt(start) + ' au ' + fmt(end);
+    }
+    return _histAgAccCap(new Date(periodKey + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }));
+}
+
+function _histAgAccDayLabel(dayKey) {
+    return _histAgAccCap(new Date(dayKey + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }));
+}
+
+function _histAgAccTogglePeriod(pk) {
+    window._histAgAccOpenPeriods[pk] = !window._histAgAccOpenPeriods[pk];
+    _histAgAccRender();
+}
+
+function _histAgAccToggleDay(dk) {
+    window._histAgAccOpenDays[dk] = !window._histAgAccOpenDays[dk];
+    _histAgAccRender();
+}
+
+function _histAgAccRender() {
+    const wrap = document.getElementById('hist-agacc-list');
+    if (!wrap) return;
+    let sales = [];
+    try { sales = JSON.parse(localStorage.getItem('covo_sales_history')) || []; } catch(e) {}
+    if (!sales.length) {
+        wrap.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted,#999);font-size:0.82rem;">Aucune vente enregistrée.</div>';
+        return;
+    }
+
+    const days = {};
+    sales.forEach(function(s) {
+        const dk = _histDateKey(s.date);
+        if (!days[dk]) days[dk] = { sales: [], ca: 0 };
+        days[dk].sales.push(s);
+        if (!s.cancelled) days[dk].ca += parseFloat(s.total || 0);
+    });
+    const periods = {};
+    Object.keys(days).forEach(function(dk) {
+        const pk = _histAgAccPeriodKey(dk);
+        if (!periods[pk]) periods[pk] = { days: {}, ca: 0 };
+        periods[pk].days[dk] = days[dk];
+        periods[pk].ca += days[dk].ca;
+    });
+
+    let html = '';
+    Object.keys(periods).sort().reverse().forEach(function(pk) {
+        const period = periods[pk];
+        const isOpen = !!window._histAgAccOpenPeriods[pk];
+        html += '<div style="border:1.5px solid var(--border-color,#e0e0e0);border-radius:10px;margin-bottom:8px;overflow:hidden;">'
+            + '<div onclick="_histAgAccTogglePeriod(\'' + pk + '\')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;background:' + (isOpen ? 'rgba(52,152,219,0.07)' : 'var(--bg-card,#fff)') + ';">'
+            +   '<div style="display:flex;align-items:center;gap:8px;">'
+            +     '<span style="font-size:0.72rem;display:inline-block;transition:transform .15s;transform:rotate(' + (isOpen ? 90 : 0) + 'deg);">▶</span>'
+            +     '<span style="font-weight:800;font-size:0.85rem;color:var(--text-main,#2c3e50);">' + _histEscape(_histAgAccPeriodLabel(pk)) + '</span>'
+            +   '</div>'
+            +   '<span style="font-weight:800;font-size:0.85rem;color:#2980b9;">' + period.ca.toFixed(2) + ' €</span>'
+            + '</div>';
+        if (isOpen) {
+            html += '<div style="padding:4px 10px 10px;">';
+            Object.keys(period.days).sort().reverse().forEach(function(dk) {
+                const day = period.days[dk];
+                const isDayOpen = !!window._histAgAccOpenDays[dk];
+                html += '<div style="border-top:1px solid var(--border-color,#eee);">'
+                    + '<div onclick="_histAgAccToggleDay(\'' + dk + '\')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 6px;cursor:pointer;">'
+                    +   '<div style="display:flex;align-items:center;gap:7px;">'
+                    +     '<span style="font-size:0.66rem;color:var(--text-muted,#999);display:inline-block;transition:transform .15s;transform:rotate(' + (isDayOpen ? 90 : 0) + 'deg);">▶</span>'
+                    +     '<span style="font-size:0.8rem;color:var(--text-main,#2c3e50);">' + _histEscape(_histAgAccDayLabel(dk)) + '</span>'
+                    +   '</div>'
+                    +   '<span style="font-size:0.8rem;font-weight:700;color:#059669;">' + day.ca.toFixed(2) + ' €</span>'
+                    + '</div>';
+                if (isDayOpen) {
+                    html += '<div style="padding:2px 10px 10px 26px;display:flex;flex-direction:column;gap:5px;">';
+                    day.sales.slice().sort(function(a, b){ return new Date(a.date) - new Date(b.date); }).forEach(function(s, i) {
+                        const idx = (window._sortedSalesHistory || []).findIndex(function(x){ return x.id === s.id; });
+                        const clickable = idx >= 0;
+                        html += '<div ' + (clickable ? ('onclick="event.stopPropagation();showTicketFromHistory(' + idx + ')" title="Voir le ticket"') : '')
+                            + ' style="display:flex;justify-content:space-between;gap:8px;font-size:0.78rem;padding:5px 8px;background:var(--bg-body,#f4f7f6);border-radius:7px;' + (clickable ? 'cursor:pointer;' : '') + (s.cancelled ? 'opacity:0.6;text-decoration:line-through;' : '') + '">'
+                            +   '<span>🧾 Vente ' + (i + 1) + (s.cancelled ? ' (annulée)' : '') + '</span>'
+                            +   '<span style="font-weight:700;">' + parseFloat(s.total || 0).toFixed(2) + ' €</span>'
+                            + '</div>';
+                    });
+                    html += '</div>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+        }
+        html += '</div>';
+    });
+    wrap.innerHTML = html;
 }
 
 // ===== HISTORIQUE VENTES — KPI + GRAPHIQUES =====
@@ -1538,9 +1678,14 @@ window.cpMaybeShowInstallBanner = function(){
     if (typeof _histAgendaInit === 'function') _histAgendaInit();
     window.addEventListener('storage', function(e){
         if (e.key === 'covo_current_user') cpRefreshUserBadge();
-        if (e.key === 'covo_sales_history') { renderCashierHistory(); if (typeof _histAgendaRenderBars === 'function') _histAgendaRenderBars(); }
+        if (e.key === 'covo_sales_history') {
+            renderCashierHistory();
+            if (typeof _histAgendaRenderBars === 'function') _histAgendaRenderBars();
+            if (typeof _histAgAccRender === 'function') _histAgAccRender();
+        }
     });
     renderCashierHistory();
+    if (typeof _histAgAccRender === 'function') _histAgAccRender();
     window.addEventListener('resize', function(){
         clearTimeout(window._cpResizeTimer);
         window._cpResizeTimer = setTimeout(function(){
