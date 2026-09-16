@@ -211,34 +211,63 @@
                     </div>
                 </div>
 
-                <!-- ══ BARRE DE FILTRES ════════════════════════════════════════ -->
-                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;padding:10px 12px;background:var(--bg-card,#fff);border-radius:10px;border:1.5px solid var(--border-color,#e0e0e0);">
-                    <input type="text" id="cashier-hist-search" placeholder="🔍 Ticket, caissier, article…" oninput="filterCashierHistory(this.value)"
-                        style="padding:7px 11px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:7px;font-size:0.83rem;min-width:180px;background:var(--input-bg,#fff);color:var(--text-main,#2c3e50);flex:1;">
-                    <select id="cashier-hist-method" onchange="filterCashierHistory(document.getElementById('cashier-hist-search').value)"
-                        style="padding:7px 10px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:7px;font-size:0.82rem;background:var(--input-bg,#fff);color:var(--text-main,#2c3e50);">
-                        <option value="">Tous modes</option>
-                        <option value="cb">💳 Carte</option>
-                        <option value="cash">💶 Espèces</option>
-                        <option value="mixed">💳💶 Mixte</option>
-                    </select>
-                    <select id="cashier-hist-status" onchange="filterCashierHistory(document.getElementById('cashier-hist-search').value)"
-                        style="padding:7px 10px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:7px;font-size:0.82rem;background:var(--input-bg,#fff);color:var(--text-main,#2c3e50);">
-                        <option value="">Tous statuts</option>
-                        <option value="active">✅ Validés</option>
-                        <option value="cancelled">🚫 Annulés</option>
-                    </select>
-                    <input type="date" id="cashier-hist-date" onchange="filterCashierHistory(document.getElementById('cashier-hist-search').value)"
-                        title="Choisir un jour précis"
-                        style="padding:7px 10px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:7px;font-size:0.82rem;background:var(--input-bg,#fff);color:var(--text-main,#2c3e50);">
+                <!-- ══ BARRE DE FILTRES (réorganisée en 2 lignes pour plus de lisibilité) ══ -->
+                <div style="margin-bottom:12px;padding:12px 14px;background:var(--bg-card,#fff);border-radius:10px;border:1.5px solid var(--border-color,#e0e0e0);">
+                    <div style="margin-bottom:10px;">
+                        <input type="text" id="cashier-hist-search" placeholder="🔍 Rechercher un ticket, un caissier, un article…" oninput="filterCashierHistory(this.value)"
+                            style="width:100%;padding:9px 12px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:8px;font-size:0.85rem;background:var(--input-bg,#fff);color:var(--text-main,#2c3e50);">
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
+                        <div>
+                            <label style="display:block;font-size:0.66rem;font-weight:800;color:var(--text-muted,#999);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px;">Mode de paiement</label>
+                            <select id="cashier-hist-method" onchange="filterCashierHistory(document.getElementById('cashier-hist-search').value)"
+                                style="width:100%;padding:7px 10px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:7px;font-size:0.82rem;background:var(--input-bg,#fff);color:var(--text-main,#2c3e50);">
+                                <option value="">Tous modes</option>
+                                <option value="cb">💳 Carte</option>
+                                <option value="cash">💶 Espèces</option>
+                                <option value="mixed">💳💶 Mixte</option>
+                                <option value="ticket">🎟️ Ticket restaurant</option>
+                                <option value="credit">📒 Crédit (compte client)</option>
+                                <option value="echel">📅 Échelonné</option>
+                                <option value="points">🎁 Points fidélité</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:0.66rem;font-weight:800;color:var(--text-muted,#999);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px;">Statut</label>
+                            <select id="cashier-hist-status" onchange="filterCashierHistory(document.getElementById('cashier-hist-search').value)"
+                                style="width:100%;padding:7px 10px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:7px;font-size:0.82rem;background:var(--input-bg,#fff);color:var(--text-main,#2c3e50);">
+                                <option value="">Tous statuts</option>
+                                <option value="active">✅ Validés</option>
+                                <option value="cancelled">🚫 Annulés</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:0.66rem;font-weight:800;color:var(--text-muted,#999);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px;">Fidélité</label>
+                            <select id="cashier-hist-loyalty" onchange="filterCashierHistory(document.getElementById('cashier-hist-search').value)"
+                                style="width:100%;padding:7px 10px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:7px;font-size:0.82rem;background:var(--input-bg,#fff);color:var(--text-main,#2c3e50);">
+                                <option value="">Tous les tickets</option>
+                                <option value="with">🎁 Avec compte fidélité</option>
+                                <option value="without">Sans compte fidélité</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:0.66rem;font-weight:800;color:var(--text-muted,#999);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px;">Jour précis</label>
+                            <input type="date" id="cashier-hist-date" onchange="filterCashierHistory(document.getElementById('cashier-hist-search').value)"
+                                title="Choisir un jour précis"
+                                style="width:100%;padding:7px 10px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:7px;font-size:0.82rem;background:var(--input-bg,#fff);color:var(--text-main,#2c3e50);">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ══ AGENDA DYNAMIQUE — CURSEUR DE SÉLECTION DE DATE/PLAGE ═══ -->
                 <div style="margin-bottom:14px;padding:14px 16px 12px;background:var(--bg-card,#fff);border-radius:12px;border:1.5px solid var(--border-color,#e0e0e0);">
-                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
                         <div style="font-size:0.74rem;font-weight:800;color:var(--text-muted,#888);text-transform:uppercase;letter-spacing:0.5px;">🗓️ Agenda dynamique</div>
                         <div id="hist-agenda-label" style="font-size:0.86rem;font-weight:800;color:#2980b9;">📅 —</div>
                     </div>
+                    <!-- Mini histogramme du CA quotidien — une barre par jour, proportionnelle au CA de ce jour,
+                         alignée sur la même échelle (0..totalDays) que le curseur juste en dessous. -->
+                    <div id="hist-agenda-bars" style="position:relative;height:30px;margin:0 6px 2px;"></div>
                     <div style="position:relative;height:34px;margin:0 6px;">
                         <div style="position:absolute;top:15px;left:0;right:0;height:4px;border-radius:4px;background:var(--border-color,#e0e0e0);"></div>
                         <div id="hist-agenda-track-fill" style="position:absolute;top:15px;height:4px;border-radius:4px;background:linear-gradient(90deg,#3498db,#2980b9);"></div>
@@ -567,9 +596,23 @@ function renderCashierHistory(salesData) {
     listEl.innerHTML = sorted.map((s, idx) => {
         const isCancelled = s.cancelled === true;
         const dateStr = new Date(s.date).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-        const methodLabel = s.method==='cb' ? '💳 Carte' : s.method==='cash' ? '💶 Espèces' : '💳💶 Mixte';
+        const methodLabel = s.method==='cb' ? '💳 Carte'
+            : s.method==='cash' ? '💶 Espèces'
+            : s.method==='ticket' ? '🎟️ Ticket restaurant'
+            : s.method==='credit' ? '📒 Crédit (compte client)'
+            : s.method==='echel' ? '📅 Échelonné'
+            : s.method==='points' ? '🎁 Points fidélité'
+            : '💳💶 Mixte';
         const itemsPreview = (s.items||[]).map(it=>it.name||it.nom||'?').join(' · ');
         const cancelledBadge = isCancelled ? '<span style="background:#e74c3c;color:white;font-size:0.68rem;font-weight:700;padding:1px 7px;border-radius:10px;margin-left:6px;">🚫 ANNULÉ</span>' : '';
+        // Traçabilité crédit : nom du client + solde dû juste après ce ticket (renseigné par COVO Pro
+        // au moment de la vente — voir covo_pro_v28_credit.html, hooks showReceipt côté crédit/fidélité).
+        const creditBadge = (s.method==='credit' && s.creditCustomerName)
+            ? `<div style="margin-top:6px;padding:6px 10px;background:rgba(180,83,9,0.09);border-radius:8px;font-size:0.74rem;color:#92400e;font-weight:700;">📒 Crédit — ${_histEscape(s.creditCustomerName)}${s.creditBalanceAfter!=null?` · Solde dû après ce ticket : ${parseFloat(s.creditBalanceAfter).toFixed(2)} €`:''}</div>`
+            : '';
+        const loyaltyBadge = s.loyaltyCustomerName
+            ? `<div style="margin-top:6px;padding:6px 10px;background:rgba(139,92,246,0.09);border-radius:8px;font-size:0.74rem;color:#6d28d9;font-weight:700;">🎁 Fidélité — ${_histEscape(s.loyaltyCustomerName)}${s.loyaltyPointsEarned!=null?` · +${s.loyaltyPointsEarned} pts`:''}</div>`
+            : '';
         return `<div class="cashier-ticket-card${isCancelled?' cancelled':''}">
             <div class="ticket-header">
                 <div>
@@ -585,6 +628,8 @@ function renderCashierHistory(salesData) {
                 <span>🛒 ${(s.items||[]).length} article(s)</span>
             </div>
             ${itemsPreview ? `<div class="ticket-items-preview">🏷️ ${itemsPreview}</div>` : ''}
+            ${creditBadge}
+            ${loyaltyBadge}
             ${isCancelled && s.cancelledAt ? `<div style="font-size:0.72rem;color:#e74c3c;margin-top:4px;">Annulé le ${new Date(s.cancelledAt).toLocaleString('fr-FR')}</div>` : ''}
         </div>`;
     }).join('');
@@ -596,17 +641,23 @@ function filterCashierHistory(searchVal) {
         const q = (searchVal||'').toLowerCase().trim();
         const method = document.getElementById('cashier-hist-method')?.value || '';
         const status = document.getElementById('cashier-hist-status')?.value || '';
+        const loyaltyFilter = document.getElementById('cashier-hist-loyalty')?.value || '';
         const selectedDate = document.getElementById('cashier-hist-date')?.value || '';
-        
+
         if (q) sales = sales.filter(s =>
             String(s.id).includes(q) ||
             (s.cashier||'').toLowerCase().includes(q) ||
             (s.cashierId||'').toLowerCase().includes(q) ||
+            (s.creditCustomerName||'').toLowerCase().includes(q) ||
+            (s.loyaltyCustomerName||'').toLowerCase().includes(q) ||
             (s.items||[]).some(it=>(it.name||it.nom||'').toLowerCase().includes(q))
         );
         if (method) sales = sales.filter(s => s.method === method);
         if (status === 'active') sales = sales.filter(s => !s.cancelled);
         if (status === 'cancelled') sales = sales.filter(s => s.cancelled);
+        // Traçabilité fidélité : distingue les tickets liés à un compte fidélité de ceux sans.
+        if (loyaltyFilter === 'with') sales = sales.filter(s => !!s.loyaltyCustomerName);
+        if (loyaltyFilter === 'without') sales = sales.filter(s => !s.loyaltyCustomerName);
         if (selectedDate) {
             sales = sales.filter(s => _histDateKey(s.date) === selectedDate);
         } else if (window._histAgendaRange) {
@@ -639,6 +690,49 @@ function clearCashierHistoryDate() {
     if (dateEl) dateEl.value = '';
     if (typeof _histAgendaPreset === 'function') _histAgendaPreset(-1);
     else filterCashierHistory(document.getElementById('cashier-hist-search')?.value || '');
+}
+
+// ===== TRAÇABILITÉ CRÉDIT / FIDÉLITÉ — MIGRATION DES TICKETS EXISTANTS =====
+// Depuis COVO Pro, chaque nouveau ticket à crédit ou lié à un compte fidélité écrit désormais
+// directement sur son propre enregistrement (dans covo_sales_history) le nom du client concerné
+// (creditCustomerName/creditBalanceAfter pour un crédit, loyaltyCustomerName/loyaltyPointsEarned
+// pour la fidélité). Pour les tickets créés AVANT cette évolution, ce lien n'existe que côté
+// client (covo_loyalty → customers[].history[], indexé par saleId) : cette fonction, lancée une
+// fois au chargement d'Historique Pro, retrouve ces correspondances et complète rétroactivement
+// les tickets manquants — sans jamais toucher aux tickets déjà renseignés.
+function _histBackfillCreditLoyaltyLinks() {
+    try {
+        const sales = JSON.parse(localStorage.getItem('covo_sales_history')) || [];
+        const loyaltyData = JSON.parse(localStorage.getItem('covo_loyalty') || 'null');
+        if (!loyaltyData || !Array.isArray(loyaltyData.customers) || !sales.length) return;
+        const bySaleId = {};
+        loyaltyData.customers.forEach(function(c) {
+            (c.history || []).forEach(function(h) {
+                if (h.saleId != null && !bySaleId[h.saleId]) bySaleId[h.saleId] = { customer: c, entry: h };
+            });
+        });
+        let changed = false;
+        sales.forEach(function(s) {
+            const match = bySaleId[s.id];
+            if (!match) return;
+            if (s.method === 'credit' && match.entry.type === 'credit_purchase' && !s.creditCustomerName) {
+                s.creditCustomerId = match.customer.id;
+                s.creditCustomerName = match.customer.name;
+                if (s.creditBalanceAfter == null) s.creditBalanceAfter = match.customer.credit;
+                changed = true;
+            }
+            // type==='credit' désigne ici les points fidélité crédités à l'achat (voir COVO Pro,
+            // hook showReceipt ~L50331) — nom malheureux hérité de l'existant, à ne pas confondre
+            // avec un paiement à crédit (method==='credit').
+            if (match.entry.type === 'credit' && !s.loyaltyCustomerName) {
+                s.loyaltyCustomerId = match.customer.id;
+                s.loyaltyCustomerName = match.customer.name;
+                if (s.loyaltyPointsEarned == null) s.loyaltyPointsEarned = match.entry.points || 0;
+                changed = true;
+            }
+        });
+        if (changed) localStorage.setItem('covo_sales_history', JSON.stringify(sales));
+    } catch(e) { console.error(e); }
 }
 
 // ===== AGENDA DYNAMIQUE — CURSEUR (SLIDER) DE SÉLECTION DE DATE/PLAGE =====
@@ -688,6 +782,44 @@ function _histAgendaInit() {
     if (minLbl) minLbl.textContent = _histAgendaFmt(_histDateKey(b.minD));
     window._histAgendaRange = null;
     _histAgendaRender(false);
+    _histAgendaRenderBars();
+}
+
+// Mini histogramme du CA quotidien sous le titre de l'agenda : une barre fine par jour, hauteur
+// proportionnelle au CA de ce jour (jours validés uniquement), sur la même échelle 0..totalDays
+// que le curseur juste en dessous — donne une vision financière rapide et visuelle de la période.
+function _histAgendaRenderBars() {
+    const wrap = document.getElementById('hist-agenda-bars');
+    const b = window._histAgendaBounds;
+    if (!wrap || !b) return;
+    let sales = [];
+    try { sales = JSON.parse(localStorage.getItem('covo_sales_history')) || []; } catch(e) {}
+    const caByDay = {};
+    let maxCA = 0;
+    sales.forEach(function(s) {
+        if (s.cancelled) return;
+        const k = _histDateKey(s.date);
+        const v = (caByDay[k] || 0) + parseFloat(s.total || 0);
+        caByDay[k] = v;
+        if (v > maxCA) maxCA = v;
+    });
+    if (maxCA <= 0 || b.totalDays <= 0) { wrap.innerHTML = ''; return; }
+    // Une barre par jour si la période est courte, sinon on regroupe visuellement (une barre par
+    // pas de jours) pour rester lisible sur une longue plage sans dépasser ~120 barres.
+    const step = Math.max(1, Math.ceil((b.totalDays + 1) / 120));
+    let html = '';
+    for (let idx = 0; idx <= b.totalDays; idx += step) {
+        let sum = 0;
+        for (let j = idx; j < Math.min(idx + step, b.totalDays + 1); j++) {
+            sum += caByDay[_histAgendaIdxToKey(j)] || 0;
+        }
+        const pct = (idx / b.totalDays) * 100;
+        const wPct = (step / (b.totalDays + 1)) * 100;
+        const hPct = Math.min(100, (sum / maxCA) * 100);
+        if (hPct <= 0) continue;
+        html += `<div title="${_histAgendaFmt(_histAgendaIdxToKey(idx))} : ${sum.toFixed(2)} €" style="position:absolute;left:${pct}%;width:${Math.max(1, wPct - 0.4)}%;bottom:0;height:${hPct}%;min-height:2px;background:linear-gradient(180deg,#5dade2,#2980b9);border-radius:2px 2px 0 0;"></div>`;
+    }
+    wrap.innerHTML = html;
 }
 
 function _histAgendaOnInput(which) {
@@ -1402,10 +1534,11 @@ window.cpMaybeShowInstallBanner = function(){
 // ── Initialisation ────────────────────────────────────────────────────────
 (function cpInit(){
     cpRefreshUserBadge();
+    if (typeof _histBackfillCreditLoyaltyLinks === 'function') _histBackfillCreditLoyaltyLinks();
     if (typeof _histAgendaInit === 'function') _histAgendaInit();
     window.addEventListener('storage', function(e){
         if (e.key === 'covo_current_user') cpRefreshUserBadge();
-        if (e.key === 'covo_sales_history') renderCashierHistory();
+        if (e.key === 'covo_sales_history') { renderCashierHistory(); if (typeof _histAgendaRenderBars === 'function') _histAgendaRenderBars(); }
     });
     renderCashierHistory();
     window.addEventListener('resize', function(){
