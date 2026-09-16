@@ -110,6 +110,16 @@
     .cashier-ticket-card.cancelled .ticket-total { color:#aaa; text-decoration:line-through; }
     .cashier-ticket-card .ticket-meta { font-size:0.77rem; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:8px; }
     .cashier-ticket-card .ticket-items-preview { font-size:0.78rem; color:var(--text-muted); margin-top:5px; padding-top:5px; border-top:1px solid var(--border-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    /* ══ Agenda dynamique — curseur (slider) de sélection de date/plage ══ */
+    .hist-agenda-range { position:absolute; top:0; left:0; width:100%; height:34px; margin:0; background:transparent; -webkit-appearance:none; appearance:none; pointer-events:none; }
+    .hist-agenda-range:focus { outline:none; }
+    .hist-agenda-range::-webkit-slider-runnable-track { background:transparent; -webkit-appearance:none; height:34px; }
+    .hist-agenda-range::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; pointer-events:auto; width:20px; height:20px; margin-top:7px; border-radius:50%; background:#2980b9; border:3px solid #fff; box-shadow:0 1px 5px rgba(0,0,0,0.4); cursor:grab; transition:transform 0.1s; }
+    .hist-agenda-range::-webkit-slider-thumb:active { cursor:grabbing; transform:scale(1.15); }
+    .hist-agenda-range::-moz-range-track { background:transparent; height:34px; border:none; }
+    .hist-agenda-range::-moz-range-thumb { pointer-events:auto; width:20px; height:20px; border-radius:50%; background:#2980b9; border:3px solid #fff; box-shadow:0 1px 5px rgba(0,0,0,0.4); cursor:grab; }
+    .hist-agenda-range::-moz-range-thumb:active { cursor:grabbing; }
+    .hist-agenda-preset.active { background:#3498db !important; color:#fff !important; border-color:#2980b9 !important; }
 </style>
 </head>
 <body>
@@ -221,6 +231,30 @@
                     <input type="date" id="cashier-hist-date" onchange="filterCashierHistory(document.getElementById('cashier-hist-search').value)"
                         title="Choisir un jour précis"
                         style="padding:7px 10px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:7px;font-size:0.82rem;background:var(--input-bg,#fff);color:var(--text-main,#2c3e50);">
+                </div>
+
+                <!-- ══ AGENDA DYNAMIQUE — CURSEUR DE SÉLECTION DE DATE/PLAGE ═══ -->
+                <div style="margin-bottom:14px;padding:14px 16px 12px;background:var(--bg-card,#fff);border-radius:12px;border:1.5px solid var(--border-color,#e0e0e0);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                        <div style="font-size:0.74rem;font-weight:800;color:var(--text-muted,#888);text-transform:uppercase;letter-spacing:0.5px;">🗓️ Agenda dynamique</div>
+                        <div id="hist-agenda-label" style="font-size:0.86rem;font-weight:800;color:#2980b9;">📅 —</div>
+                    </div>
+                    <div style="position:relative;height:34px;margin:0 6px;">
+                        <div style="position:absolute;top:15px;left:0;right:0;height:4px;border-radius:4px;background:var(--border-color,#e0e0e0);"></div>
+                        <div id="hist-agenda-track-fill" style="position:absolute;top:15px;height:4px;border-radius:4px;background:linear-gradient(90deg,#3498db,#2980b9);"></div>
+                        <input type="range" id="hist-agenda-start" class="hist-agenda-range" min="0" max="100" value="0" step="1" oninput="_histAgendaOnInput('start')" title="Début de la plage">
+                        <input type="range" id="hist-agenda-end" class="hist-agenda-range" min="0" max="100" value="100" step="1" oninput="_histAgendaOnInput('end')" title="Fin de la plage">
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.66rem;color:var(--text-muted,#999);margin-top:2px;padding:0 3px;">
+                        <span id="hist-agenda-min-label">—</span>
+                        <span id="hist-agenda-max-label">Aujourd'hui</span>
+                    </div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
+                        <button class="hist-agenda-preset" onclick="_histAgendaPreset(0,this)" style="padding:5px 11px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:20px;font-size:0.72rem;font-weight:700;cursor:pointer;background:var(--bg-body,#f4f7f6);color:var(--text-main,#2c3e50);">Aujourd'hui</button>
+                        <button class="hist-agenda-preset" onclick="_histAgendaPreset(7,this)" style="padding:5px 11px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:20px;font-size:0.72rem;font-weight:700;cursor:pointer;background:var(--bg-body,#f4f7f6);color:var(--text-main,#2c3e50);">7 derniers jours</button>
+                        <button class="hist-agenda-preset" onclick="_histAgendaPreset(30,this)" style="padding:5px 11px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:20px;font-size:0.72rem;font-weight:700;cursor:pointer;background:var(--bg-body,#f4f7f6);color:var(--text-main,#2c3e50);">30 derniers jours</button>
+                        <button class="hist-agenda-preset active" onclick="_histAgendaPreset(-1,this)" style="padding:5px 11px;border:1.5px solid var(--border-color,#e0e0e0);border-radius:20px;font-size:0.72rem;font-weight:700;cursor:pointer;background:var(--bg-body,#f4f7f6);color:var(--text-main,#2c3e50);">Toute la période</button>
+                    </div>
                 </div>
 
                 <!-- ══ STATS RAPIDES CLIQUABLES ════════════════════════════════ -->
@@ -573,14 +607,21 @@ function filterCashierHistory(searchVal) {
         if (method) sales = sales.filter(s => s.method === method);
         if (status === 'active') sales = sales.filter(s => !s.cancelled);
         if (status === 'cancelled') sales = sales.filter(s => s.cancelled);
-        if (selectedDate) sales = sales.filter(s => _histDateKey(s.date) === selectedDate);
-        
+        if (selectedDate) {
+            sales = sales.filter(s => _histDateKey(s.date) === selectedDate);
+        } else if (window._histAgendaRange) {
+            // Agenda dynamique (curseur) : plage de dates sélectionnée visuellement — ignorée
+            // dès qu'un jour précis est choisi via le champ ci-dessus, qui reste prioritaire.
+            const r = window._histAgendaRange;
+            sales = sales.filter(s => { const k = _histDateKey(s.date); return k >= r.start && k <= r.end; });
+        }
+
         // Filtre temporel (aujourd'hui)
         if (window._histTimeFilter === 'today') {
             const today = new Date().toDateString();
             sales = sales.filter(s => new Date(s.date).toDateString() === today);
         }
-        
+
         renderCashierHistory(sales);
     } catch(e) { console.error(e); }
 }
@@ -589,13 +630,131 @@ function setCashierHistoryDateToday() {
     const dateEl = document.getElementById('cashier-hist-date');
     if (dateEl) dateEl.value = _histDateKey(new Date());
     window._histTimeFilter = 'all';
-    filterCashierHistory(document.getElementById('cashier-hist-search')?.value || '');
+    if (typeof _histAgendaPreset === 'function') _histAgendaPreset(0);
+    else filterCashierHistory(document.getElementById('cashier-hist-search')?.value || '');
 }
 
 function clearCashierHistoryDate() {
     const dateEl = document.getElementById('cashier-hist-date');
     if (dateEl) dateEl.value = '';
-    filterCashierHistory(document.getElementById('cashier-hist-search')?.value || '');
+    if (typeof _histAgendaPreset === 'function') _histAgendaPreset(-1);
+    else filterCashierHistory(document.getElementById('cashier-hist-search')?.value || '');
+}
+
+// ===== AGENDA DYNAMIQUE — CURSEUR (SLIDER) DE SÉLECTION DE DATE/PLAGE =====
+// Permet de faire défiler et sélectionner visuellement, de façon fluide et interactive,
+// soit une plage de dates (les deux curseurs écartés), soit un jour précis (curseurs réunis).
+window._histAgendaRange = null;
+window._histAgendaBounds = null;
+
+function _histAgendaBoundsCompute() {
+    let sales = [];
+    try { sales = JSON.parse(localStorage.getItem('covo_sales_history')) || []; } catch(e) {}
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let minTime = today.getTime();
+    sales.forEach(function(s) {
+        const t = new Date(s.date).getTime();
+        if (!isNaN(t) && t < minTime) minTime = t;
+    });
+    let minD = new Date(minTime); minD.setHours(0, 0, 0, 0);
+    const fallbackMin = new Date(today); fallbackMin.setDate(today.getDate() - 30);
+    if (minD.getTime() >= today.getTime()) minD = fallbackMin; // pas assez d'historique : plage par défaut de 30 jours
+    const totalDays = Math.max(1, Math.round((today - minD) / 86400000));
+    return { minD: minD, today: today, totalDays: totalDays };
+}
+
+function _histAgendaFmt(dateKey) {
+    try { return new Date(dateKey + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }); }
+    catch(e) { return dateKey; }
+}
+
+function _histAgendaIdxToKey(idx) {
+    const b = window._histAgendaBounds; if (!b) return '';
+    const d = new Date(b.minD); d.setDate(d.getDate() + idx);
+    return _histDateKey(d);
+}
+
+function _histAgendaInit() {
+    const b = _histAgendaBoundsCompute();
+    window._histAgendaBounds = b;
+    const startEl = document.getElementById('hist-agenda-start');
+    const endEl = document.getElementById('hist-agenda-end');
+    if (!startEl || !endEl) return;
+    startEl.min = endEl.min = '0';
+    startEl.max = endEl.max = String(b.totalDays);
+    startEl.value = '0';
+    endEl.value = String(b.totalDays);
+    const minLbl = document.getElementById('hist-agenda-min-label');
+    if (minLbl) minLbl.textContent = _histAgendaFmt(_histDateKey(b.minD));
+    window._histAgendaRange = null;
+    _histAgendaRender(false);
+}
+
+function _histAgendaOnInput(which) {
+    const startEl = document.getElementById('hist-agenda-start');
+    const endEl = document.getElementById('hist-agenda-end');
+    if (!startEl || !endEl) return;
+    let s = parseInt(startEl.value, 10) || 0;
+    let e = parseInt(endEl.value, 10) || 0;
+    // Empêche les deux curseurs de se croiser : ils peuvent se toucher (jour unique) mais pas s'inverser.
+    if (which === 'start' && s > e) { s = e; startEl.value = String(s); }
+    if (which === 'end' && e < s) { e = s; endEl.value = String(e); }
+    document.querySelectorAll('.hist-agenda-preset').forEach(function(b){ b.classList.remove('active'); });
+    // Le curseur prend la main sur le champ "jour précis" classique pour éviter toute ambiguïté.
+    const dateEl = document.getElementById('cashier-hist-date');
+    if (dateEl) dateEl.value = '';
+    _histAgendaRender(true);
+}
+
+function _histAgendaRender(apply) {
+    const b = window._histAgendaBounds; if (!b) return;
+    const startEl = document.getElementById('hist-agenda-start');
+    const endEl = document.getElementById('hist-agenda-end');
+    if (!startEl || !endEl) return;
+    const s = parseInt(startEl.value, 10) || 0;
+    const e = parseInt(endEl.value, 10) || 0;
+    const startKey = _histAgendaIdxToKey(s);
+    const endKey = _histAgendaIdxToKey(e);
+    const labelEl = document.getElementById('hist-agenda-label');
+    if (labelEl) {
+        labelEl.textContent = (s === e)
+            ? ('📅 ' + _histAgendaFmt(startKey))
+            : ('📅 Du ' + _histAgendaFmt(startKey) + ' au ' + _histAgendaFmt(endKey));
+    }
+    const track = document.getElementById('hist-agenda-track-fill');
+    if (track) {
+        const pctS = b.totalDays > 0 ? (s / b.totalDays) * 100 : 0;
+        const pctE = b.totalDays > 0 ? (e / b.totalDays) * 100 : 100;
+        track.style.left = pctS + '%';
+        track.style.width = Math.max(0, pctE - pctS) + '%';
+    }
+    if (apply) {
+        window._histAgendaRange = (s === 0 && e === b.totalDays) ? null : { start: startKey, end: endKey };
+        filterCashierHistory(document.getElementById('cashier-hist-search')?.value || '');
+    }
+}
+
+function _histAgendaPreset(days, btnEl) {
+    const b = window._histAgendaBounds; if (!b) return;
+    const startEl = document.getElementById('hist-agenda-start');
+    const endEl = document.getElementById('hist-agenda-end');
+    if (!startEl || !endEl) return;
+    if (days < 0) { // "Toute la période"
+        startEl.value = '0';
+        endEl.value = String(b.totalDays);
+    } else {
+        endEl.value = String(b.totalDays); // aujourd'hui
+        startEl.value = String(Math.max(0, b.totalDays - days));
+    }
+    document.querySelectorAll('.hist-agenda-preset').forEach(function(bt){ bt.classList.remove('active'); });
+    if (btnEl) btnEl.classList.add('active');
+    else {
+        // appelé programmatiquement (ex: bouton "Aujourd'hui" classique) : réactive le bon chip visuel
+        const idx = days === 0 ? 0 : (days === 7 ? 1 : (days === 30 ? 2 : 3));
+        const chip = document.querySelectorAll('.hist-agenda-preset')[idx];
+        if (chip) chip.classList.add('active');
+    }
+    _histAgendaRender(true);
 }
 
 // ===== HISTORIQUE VENTES — KPI + GRAPHIQUES =====
@@ -1197,14 +1356,20 @@ function _cpApplyRestore(data) {
     window._cpDeferredPrompt = null;
     var btn = document.getElementById('cp-install-btn');
     var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-    if (btn && !isStandalone) btn.style.display = '';
+    var _cpWasInstalled = false;
+    try { _cpWasInstalled = localStorage.getItem('covo_pwa_installed_historiquepro') === '1'; } catch(e) {}
+    if (isStandalone) { try { localStorage.setItem('covo_pwa_installed_historiquepro', '1'); } catch(e) {} }
+    // Application déjà installée sur le bureau (détectée cette session en mode standalone, ou lors
+    // d'une session précédente via l'évènement "appinstalled" ci-dessous) : ne jamais réafficher le
+    // bouton/icône "Installer", même si l'app est ouverte dans un onglet de navigateur classique.
+    if (btn) btn.style.display = (isStandalone || _cpWasInstalled) ? 'none' : '';
     window.addEventListener('beforeinstallprompt', function(e) {
         e.preventDefault();
         window._cpDeferredPrompt = e;
-        if (btn) btn.style.display = '';
+        if (btn && !isStandalone && !_cpWasInstalled) btn.style.display = '';
         if (typeof window.cpMaybeShowInstallBanner === 'function') window.cpMaybeShowInstallBanner();
     });
-    window.addEventListener('appinstalled', function() { if (btn) btn.style.display = 'none'; var bn = document.getElementById('cp-install-banner'); if (bn) bn.style.display = 'none'; showScanToast('✅ Application installée', 'success'); });
+    window.addEventListener('appinstalled', function() { if (btn) btn.style.display = 'none'; try { localStorage.setItem('covo_pwa_installed_historiquepro', '1'); } catch(e) {} var bn = document.getElementById('cp-install-banner'); if (bn) bn.style.display = 'none'; showScanToast('✅ Application installée', 'success'); });
 })();
 
 window.cpInstallClick = function() {
@@ -1227,14 +1392,17 @@ window.cpMaybeShowInstallBanner = function(){
     var b = document.getElementById('cp-install-banner');
     if (!b) return;
     var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    var wasInstalled = false;
+    try { wasInstalled = localStorage.getItem('covo_pwa_installed_historiquepro') === '1'; } catch(e) {}
     var dismissed = false;
     try { dismissed = localStorage.getItem('covo_pwa_dismiss_historiquepro') === '1'; } catch(e) {}
-    b.style.display = (!isStandalone && !dismissed && window._cpDeferredPrompt) ? 'flex' : 'none';
+    b.style.display = (!isStandalone && !wasInstalled && !dismissed && window._cpDeferredPrompt) ? 'flex' : 'none';
 };
 
 // ── Initialisation ────────────────────────────────────────────────────────
 (function cpInit(){
     cpRefreshUserBadge();
+    if (typeof _histAgendaInit === 'function') _histAgendaInit();
     window.addEventListener('storage', function(e){
         if (e.key === 'covo_current_user') cpRefreshUserBadge();
         if (e.key === 'covo_sales_history') renderCashierHistory();
