@@ -473,7 +473,7 @@ window.showTicketFromHistory = function(idx) {
     var titleEl = document.getElementById('hist-ticket-title');
     var bodyEl  = document.getElementById('hist-ticket-body');
     if (!titleEl || !bodyEl) return;
-    titleEl.textContent = '🧾 Ticket #' + sale.id + (sale.cancelled ? ' (annulé)' : '');
+    titleEl.textContent = '🧾 Ticket #' + (sale.ticketNum != null ? sale.ticketNum : sale.id) + (sale.cancelled ? ' (annulé)' : '');
     var dateStr = new Date(sale.date).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
     var methodLabel = sale.method==='cb' ? '💳 Carte' : sale.method==='cash' ? '💶 Espèces' : '💳💶 Mixte';
     var rows = (sale.items||[]).map(function(it) {
@@ -486,6 +486,7 @@ window.showTicketFromHistory = function(idx) {
     }).join('') || '<div style="color:var(--text-muted,#888);">Aucun article détaillé.</div>';
     bodyEl.innerHTML =
         '<div style="margin-bottom:10px;font-size:0.78rem;color:var(--text-muted,#888);">📅 ' + dateStr + ' · 👤 ' + (sale.cashier||sale.cashierId||'-') + ' · ' + methodLabel + '</div>' +
+        (sale.ticketNum != null ? '<div style="margin-bottom:10px;font-size:0.68rem;color:var(--text-muted,#aaa);">Référence interne (unique) : ' + sale.id + ' — utile si un autre ticket partage le n°' + sale.ticketNum + ' après une réinitialisation du compteur.</div>' : '') +
         rows +
         '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:2px solid var(--border-color,#eee);font-weight:900;font-size:1rem;">' +
         '<span>Total</span><span>' + parseFloat(sale.total||0).toFixed(2) + ' €</span></div>' +
@@ -672,7 +673,7 @@ function renderCashierHistory(salesData) {
         return `<div class="cashier-ticket-card${isCancelled?' cancelled':''}">
             <div class="ticket-header">
                 <div>
-                    <span class="ticket-num" onclick="showTicketFromHistory(${idx})" title="Voir le ticket">🧾 Ticket #${s.id}</span>
+                    <span class="ticket-num" onclick="showTicketFromHistory(${idx})" title="Voir le ticket">🧾 Ticket #${s.ticketNum != null ? s.ticketNum : s.id}</span>
                     ${cancelledBadge}
                 </div>
                 <span class="ticket-total">${parseFloat(s.total||0).toFixed(2)} €</span>
@@ -700,14 +701,31 @@ function filterCashierHistory(searchVal) {
         const loyaltyFilter = document.getElementById('cashier-hist-loyalty')?.value || '';
         const selectedDate = document.getElementById('cashier-hist-date')?.value || '';
 
-        if (q) sales = sales.filter(s =>
-            String(s.id).includes(q) ||
-            (s.cashier||'').toLowerCase().includes(q) ||
-            (s.cashierId||'').toLowerCase().includes(q) ||
-            (s.creditCustomerName||'').toLowerCase().includes(q) ||
-            (s.loyaltyCustomerName||'').toLowerCase().includes(q) ||
-            (s.items||[]).some(it=>(it.name||it.nom||'').toLowerCase().includes(q))
-        );
+        if (q) {
+            // Numéro de ticket : le numéro RÉELLEMENT imprimé sur le reçu / affiché ailleurs dans
+            // la suite (COVO Pro, Gestion Pro) est sale.ticketNum (compteur séquentiel), PAS
+            // sale.id (horodatage interne unique, Date.now()). Cette recherche ne testait
+            // auparavant QUE s.id — une recherche par le numéro visible sur le ticket physique ne
+            // trouvait donc jamais rien (l'id est un nombre à 13 chiffres qui ne "contient" quasi
+            // jamais le petit numéro cherché). Priorité à la correspondance EXACTE sur le numéro
+            // séquentiel (ticketNum) : le compteur peut être remis à 1 manuellement (bouton
+            // "Réinitialiser" des réglages de reçu), donc plusieurs tickets de périodes
+            // différentes peuvent légitimement partager le même numéro — dans ce cas TOUS sont
+            // renvoyés (jamais un seul choisi au hasard) et la date/heure affichée sur chaque
+            // carte permet de distinguer le bon. Si aucune correspondance exacte de numéro, repli
+            // sur la recherche texte habituelle (id, caissier, client, articles).
+            const qNum = q.replace(/^#/, '');
+            const exactNumMatches = sales.filter(s => String(s.ticketNum||'') === qNum || String(s.id) === qNum);
+            sales = exactNumMatches.length ? exactNumMatches : sales.filter(s =>
+                String(s.id).includes(q) ||
+                String(s.ticketNum||'').includes(qNum) ||
+                (s.cashier||'').toLowerCase().includes(q) ||
+                (s.cashierId||'').toLowerCase().includes(q) ||
+                (s.creditCustomerName||'').toLowerCase().includes(q) ||
+                (s.loyaltyCustomerName||'').toLowerCase().includes(q) ||
+                (s.items||[]).some(it=>(it.name||it.nom||'').toLowerCase().includes(q))
+            );
+        }
         if (method) sales = sales.filter(s => s.method === method);
         if (status === 'active') sales = sales.filter(s => !s.cancelled);
         if (status === 'cancelled') sales = sales.filter(s => s.cancelled);
@@ -1160,7 +1178,7 @@ function _histAgAccRenderTable(dayKey) {
         const client = s.creditCustomerName ? ('📒 ' + _histEscape(s.creditCustomerName)) : (s.loyaltyCustomerName ? ('🎁 ' + _histEscape(s.loyaltyCustomerName)) : '—');
         const rowStyle = (s.cancelled ? 'opacity:0.55;text-decoration:line-through;' : '') + (clickable ? 'cursor:pointer;' : '');
         return '<tr ' + (clickable ? ('onclick="showTicketFromHistory(' + idx + ')" title="Voir le ticket"') : '') + ' style="' + rowStyle + 'border-top:1px solid var(--border-color,#eee);">'
-            + '<td style="padding:7px 10px;">🧾 #' + s.id + (s.cancelled ? ' 🚫' : '') + '</td>'
+            + '<td style="padding:7px 10px;">🧾 #' + (s.ticketNum != null ? s.ticketNum : s.id) + (s.cancelled ? ' 🚫' : '') + '</td>'
             + '<td style="padding:7px 10px;">' + heure + '</td>'
             + '<td style="padding:7px 10px;white-space:nowrap;">' + methodLabelOf(s) + '</td>'
             + '<td style="padding:7px 10px;">' + client + '</td>'
