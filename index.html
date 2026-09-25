@@ -106,6 +106,7 @@
     .cashier-ticket-card .ticket-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
     .cashier-ticket-card .ticket-num { font-weight:700; color:#3498db; cursor:pointer; }
     .cashier-ticket-card .ticket-num:hover { text-decoration:underline; }
+    .cashier-ticket-card .ticket-ref { font-size:0.68rem; font-weight:400; color:var(--text-muted,#aaa); margin-left:6px; user-select:all; }
     .cashier-ticket-card .ticket-total { font-weight:700; color:#2ecc71; font-size:1rem; }
     .cashier-ticket-card.cancelled .ticket-total { color:#aaa; text-decoration:line-through; }
     .cashier-ticket-card .ticket-meta { font-size:0.77rem; color:var(--text-muted); display:flex; flex-wrap:wrap; gap:8px; }
@@ -673,7 +674,7 @@ function renderCashierHistory(salesData) {
         return `<div class="cashier-ticket-card${isCancelled?' cancelled':''}">
             <div class="ticket-header">
                 <div>
-                    <span class="ticket-num" onclick="showTicketFromHistory(${idx})" title="Voir le ticket">🧾 Ticket #${s.ticketNum != null ? s.ticketNum : s.id}</span>
+                    <span class="ticket-num" onclick="showTicketFromHistory(${idx})" title="Voir le ticket">🧾 Ticket #${s.ticketNum != null ? s.ticketNum : s.id}</span>${s.ticketNum != null ? `<span class="ticket-ref" title="Référence complète et unique de ce ticket — utile si le n° ci-dessus est partagé par plusieurs tickets (compteur réinitialisé)">réf. complète : ${s.id}</span>` : ''}
                     ${cancelledBadge}
                 </div>
                 <span class="ticket-total">${parseFloat(s.total||0).toFixed(2)} €</span>
@@ -1178,7 +1179,7 @@ function _histAgAccRenderTable(dayKey) {
         const client = s.creditCustomerName ? ('📒 ' + _histEscape(s.creditCustomerName)) : (s.loyaltyCustomerName ? ('🎁 ' + _histEscape(s.loyaltyCustomerName)) : '—');
         const rowStyle = (s.cancelled ? 'opacity:0.55;text-decoration:line-through;' : '') + (clickable ? 'cursor:pointer;' : '');
         return '<tr ' + (clickable ? ('onclick="showTicketFromHistory(' + idx + ')" title="Voir le ticket"') : '') + ' style="' + rowStyle + 'border-top:1px solid var(--border-color,#eee);">'
-            + '<td style="padding:7px 10px;">🧾 #' + (s.ticketNum != null ? s.ticketNum : s.id) + (s.cancelled ? ' 🚫' : '') + '</td>'
+            + '<td style="padding:7px 10px;">🧾 #' + (s.ticketNum != null ? s.ticketNum : s.id) + (s.cancelled ? ' 🚫' : '') + (s.ticketNum != null ? '<br><span style="font-size:0.65rem;color:var(--text-muted,#aaa);">réf. ' + s.id + '</span>' : '') + '</td>'
             + '<td style="padding:7px 10px;">' + heure + '</td>'
             + '<td style="padding:7px 10px;white-space:nowrap;">' + methodLabelOf(s) + '</td>'
             + '<td style="padding:7px 10px;">' + client + '</td>'
