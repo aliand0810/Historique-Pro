@@ -474,7 +474,7 @@ window.showTicketFromHistory = function(idx) {
     var titleEl = document.getElementById('hist-ticket-title');
     var bodyEl  = document.getElementById('hist-ticket-body');
     if (!titleEl || !bodyEl) return;
-    titleEl.textContent = '🧾 Ticket #' + (sale.ticketNum != null ? sale.ticketNum : sale.id) + (sale.cancelled ? ' (annulé)' : '');
+    titleEl.textContent = '🧾 Ticket #' + sale.id + (sale.cancelled ? ' (annulé)' : '');
     var dateStr = new Date(sale.date).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
     var methodLabel = sale.method==='cb' ? '💳 Carte' : sale.method==='cash' ? '💶 Espèces' : '💳💶 Mixte';
     var rows = (sale.items||[]).map(function(it) {
@@ -487,7 +487,7 @@ window.showTicketFromHistory = function(idx) {
     }).join('') || '<div style="color:var(--text-muted,#888);">Aucun article détaillé.</div>';
     bodyEl.innerHTML =
         '<div style="margin-bottom:10px;font-size:0.78rem;color:var(--text-muted,#888);">📅 ' + dateStr + ' · 👤 ' + (sale.cashier||sale.cashierId||'-') + ' · ' + methodLabel + '</div>' +
-        (sale.ticketNum != null ? '<div style="margin-bottom:10px;font-size:0.68rem;color:var(--text-muted,#aaa);">Référence interne (unique) : ' + sale.id + ' — utile si un autre ticket partage le n°' + sale.ticketNum + ' après une réinitialisation du compteur.</div>' : '') +
+        (sale.ticketNum != null ? '<div style="margin-bottom:10px;font-size:0.68rem;color:var(--text-muted,#aaa);">N° de caisse (imprimé sur le reçu) : ' + sale.ticketNum + ' — peut être partagé par un autre ticket après une réinitialisation du compteur ; le numéro ci-dessus (' + sale.id + ') est toujours unique.</div>' : '') +
         rows +
         '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:2px solid var(--border-color,#eee);font-weight:900;font-size:1rem;">' +
         '<span>Total</span><span>' + parseFloat(sale.total||0).toFixed(2) + ' €</span></div>' +
@@ -674,7 +674,7 @@ function renderCashierHistory(salesData) {
         return `<div class="cashier-ticket-card${isCancelled?' cancelled':''}">
             <div class="ticket-header">
                 <div>
-                    <span class="ticket-num" onclick="showTicketFromHistory(${idx})" title="Voir le ticket">🧾 Ticket #${s.ticketNum != null ? s.ticketNum : s.id}</span>${s.ticketNum != null ? `<span class="ticket-ref" title="Référence complète et unique de ce ticket — utile si le n° ci-dessus est partagé par plusieurs tickets (compteur réinitialisé)">réf. complète : ${s.id}</span>` : ''}
+                    <span class="ticket-num" onclick="showTicketFromHistory(${idx})" title="Voir le ticket">🧾 Ticket #${s.id}</span>${s.ticketNum != null ? `<span class="ticket-ref" title="Numéro de caisse imprimé sur le reçu — peut être partagé par un autre ticket après une réinitialisation du compteur">n° caisse : ${s.ticketNum}</span>` : ''}
                     ${cancelledBadge}
                 </div>
                 <span class="ticket-total">${parseFloat(s.total||0).toFixed(2)} €</span>
