@@ -413,6 +413,27 @@
     .hist-agenda-bar:hover { filter:brightness(1.15); transform:scaleY(1.04); transform-origin:bottom; }
     .hist-agenda-bar.selected { background:linear-gradient(180deg,#f5b041,#e67e22) !important; box-shadow:0 0 0 1px #e67e22; }
     #hist-agacc-toggle-btn:hover { border-color:#2980b9; color:#2980b9; }
+    /* Agenda détaillé — répartition des paiements (CB / espèces / autres) */
+    .hist-pay-wrap { margin-bottom:10px; }
+    .hist-pay-bar { display:flex; gap:2px; height:8px; border-radius:6px; overflow:hidden; background:var(--bg-body,#f4f7f6); margin-bottom:8px; }
+    .hist-pay-bar > span { display:block; height:100%; min-width:3px; }
+    .hist-pay-chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .hist-pay-chip { display:flex; align-items:center; gap:7px; padding:6px 10px; border-radius:10px; cursor:pointer; font:inherit; text-align:left;
+        background:var(--bg-card,#fff); color:var(--text-main,#2c3e50); border:1.5px solid var(--border-color,#e0e0e0); transition:border-color .15s, background .15s; }
+    .hist-pay-chip:hover { border-color:var(--pc); }
+    .hist-pay-chip.on { border-color:var(--pc); background:color-mix(in srgb, var(--pc) 10%, transparent); }
+    .hist-pay-chip .hp-dot { width:9px; height:9px; border-radius:50%; background:var(--pc); flex:0 0 auto; }
+    .hist-pay-chip .hp-lbl { font-size:0.72rem; font-weight:700; color:var(--text-muted,#777); white-space:nowrap; }
+    .hist-pay-chip .hp-amt { font-size:0.84rem; font-weight:800; color:var(--text-main,#2c3e50); white-space:nowrap; }
+    .hist-pay-chip .hp-sub { font-size:0.64rem; color:var(--text-muted,#999); white-space:nowrap; }
+    .hist-pay-info { font-size:0.68rem; color:var(--text-muted,#888); margin-top:6px; }
+    .hist-pay-mini { display:flex; height:4px; border-radius:3px; overflow:hidden; gap:1px; margin-top:4px; background:var(--bg-body,#f4f7f6); }
+    .hist-pay-mini > span { display:block; height:100%; }
+    .hist-pay-ptot { display:flex; flex-direction:column; gap:3px; margin:-2px 0 10px; padding:8px 10px; border-radius:8px; background:var(--bg-body,#f4f7f6); }
+    .hist-pay-ptot > div { display:flex; justify-content:space-between; gap:8px; font-size:0.72rem; }
+    .hist-pay-ptot b { font-weight:800; color:var(--text-main,#2c3e50); white-space:nowrap; }
+    .hist-pay-detail { display:block; font-size:0.64rem; color:var(--text-muted,#999); margin-top:2px; white-space:nowrap; }
+    @media (max-width: 640px) { #hist-agacc-body { grid-template-columns:1fr !important; } }
 </style>
 </head>
 <body>
@@ -529,6 +550,7 @@
                         <!-- ── Colonne droite : tableau de détail du jour sélectionné ── -->
                         <div style="min-width:0;">
                             <div id="hist-agacc-table-title" style="font-size:0.82rem;font-weight:800;color:var(--text-main,#2c3e50);margin-bottom:8px;">—</div>
+                            <div id="hist-agacc-pay" class="hist-pay-wrap"></div>
                             <div style="overflow-x:auto;border:1.5px solid var(--border-color,#e0e0e0);border-radius:10px;">
                                 <table style="width:100%;border-collapse:collapse;font-size:0.79rem;">
                                     <thead>
@@ -1355,6 +1377,68 @@ function _histAgAccDayLabel(dayKey) {
 // Reconstruit les données groupées (jour → période) depuis covo_sales_history, puis redessine
 // le menu déroulant, la liste de jours et le tableau, en conservant la période/le jour déjà
 // sélectionnés quand ils existent toujours (sinon on retombe sur la période/le jour le plus récent).
+// ─── Répartition des paiements (CB / espèces / ticket resto / crédit / échelonné / autre) ───
+// Le total d'une vente (s.total) est le montant NET encaissé (déjà diminué de la remise points).
+// Chaque vente est ventilée par mode pour que la somme des modes = chiffre d'affaires du jour.
+const _HIST_PAY_CATS = [
+    { k: 'cb',     icon: '💳', label: 'CB',            color: '#2563eb' },
+    { k: 'cash',   icon: '💶', label: 'Espèces',       color: '#059669' },
+    { k: 'ticket', icon: '🎟️', label: 'Ticket resto',  color: '#d97706' },
+    { k: 'credit', icon: '📒', label: 'Crédit',        color: '#7c3aed' },
+    { k: 'echel',  icon: '📅', label: 'Échelonné',     color: '#db2777' },
+    { k: 'other',  icon: '🔹', label: 'Autre',         color: '#64748b' },
+    { k: 'retour', icon: '↩️', label: 'Retours',       color: '#dc2626' }
+];
+function _histPayNum(v) { const n = parseFloat(v); return isFinite(n) ? n : 0; }
+function _histPayEmpty() { return { cb: 0, cash: 0, ticket: 0, credit: 0, echel: 0, other: 0, retour: 0, points: 0, n: {} }; }
+function _histPaySplit(s) {
+    const out = { cb: 0, cash: 0, ticket: 0, credit: 0, echel: 0, other: 0, retour: 0 };
+    const total = _histPayNum(s.total);
+    const m = s.method || '';
+    if (s.type === 'retour_article') { out.retour = total; return out; }   // montant négatif (remboursement)
+    if (m === 'credit') { out.credit = total; return out; }
+    if (m === 'echel')  { out.echel = total;  return out; }
+    const has = function(f) { return s[f] !== undefined && s[f] !== null && s[f] !== ''; };
+    out.cb     = has('receivedCB')     ? _histPayNum(s.receivedCB)     : (m === 'cb' ? total : 0);
+    out.ticket = has('receivedTicket') ? _histPayNum(s.receivedTicket) : (m === 'ticket' ? total : 0);
+    let cashIn = has('receivedCash') ? _histPayNum(s.receivedCash) : (m === 'cash' ? (has('received') ? _histPayNum(s.received) : total) : 0);
+    out.cash = Math.max(0, cashIn - _histPayNum(s.change));                // la monnaie rendue sort des espèces
+    // Écart éventuel (anciennes ventes, arrondis…) : rattaché au mode le plus logique
+    let rest = total - out.cb - out.cash - out.ticket;
+    if (rest < -0.005) {
+        const takeCash = Math.min(out.cash, -rest); out.cash -= takeCash; rest += takeCash;
+        const takeCb = Math.min(out.cb, -rest); out.cb -= takeCb; rest += takeCb;
+    }
+    if (rest > 0.005) out.other += rest;
+    return out;
+}
+function _histPayAdd(acc, s) {
+    if (s.cancelled) return;
+    const sp = _histPaySplit(s);
+    _HIST_PAY_CATS.forEach(function(c) {
+        if (Math.abs(sp[c.k]) > 0.004) { acc[c.k] += sp[c.k]; acc.n[c.k] = (acc.n[c.k] || 0) + 1; }
+    });
+    acc.points += _histPayNum(s._ltyDiscount);
+}
+function _histPayMerge(acc, add) {
+    _HIST_PAY_CATS.forEach(function(c) { acc[c.k] += add[c.k]; acc.n[c.k] = (acc.n[c.k] || 0) + (add.n[c.k] || 0); });
+    acc.points += add.points;
+}
+function _histPayFmt(v) { return v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
+// Petite barre empilée (proportions des encaissements positifs)
+function _histPayBarHtml(pay, cls) {
+    const pos = _HIST_PAY_CATS.filter(function(c) { return pay[c.k] > 0.004; });
+    const sum = pos.reduce(function(a, c) { return a + pay[c.k]; }, 0);
+    if (sum <= 0) return '';
+    return '<div class="' + cls + '">' + pos.map(function(c) {
+        return '<span style="flex:' + (pay[c.k] / sum).toFixed(4) + ' 1 0;background:' + c.color + ';" title="' + c.label + ' : ' + _histPayFmt(pay[c.k]) + '"></span>';
+    }).join('') + '</div>';
+}
+function _histPayTitle(pay) {
+    return _HIST_PAY_CATS.filter(function(c) { return Math.abs(pay[c.k]) > 0.004; })
+        .map(function(c) { return c.label + ' : ' + _histPayFmt(pay[c.k]); }).join(' · ');
+}
+
 function _histAgAccRender() {
     const select = document.getElementById('hist-agacc-period-select');
     if (!select) return;
@@ -1364,16 +1448,18 @@ function _histAgAccRender() {
     const days = {};
     sales.forEach(function(s) {
         const dk = _histDateKey(s.date);
-        if (!days[dk]) days[dk] = { sales: [], ca: 0 };
+        if (!days[dk]) days[dk] = { sales: [], ca: 0, pay: _histPayEmpty() };
         days[dk].sales.push(s);
         if (!s.cancelled) days[dk].ca += parseFloat(s.total || 0);
+        _histPayAdd(days[dk].pay, s);
     });
     const periods = {};
     Object.keys(days).forEach(function(dk) {
         const pk = _histAgAccPeriodKey(dk);
-        if (!periods[pk]) periods[pk] = { days: {}, ca: 0 };
+        if (!periods[pk]) periods[pk] = { days: {}, ca: 0, pay: _histPayEmpty() };
         periods[pk].days[dk] = days[dk];
         periods[pk].ca += days[dk].ca;
+        _histPayMerge(periods[pk].pay, days[dk].pay);
     });
     window._histAgAccData = periods;
 
@@ -1400,6 +1486,7 @@ function _histAgAccRender() {
 // Menu déroulant changé par l'utilisateur : on retombe sur le jour le plus récent de la
 // nouvelle période sélectionnée (l'ancien jour sélectionné n'a aucune raison d'exister ici).
 function _histAgAccOnPeriodChange(pk) {
+    window._histAgAccPayFilter = null;
     window._histAgAccPeriodKeySel = pk;
     window._histAgAccDayKeySel = null;
     _histAgAccRenderDaysList();
@@ -1411,7 +1498,22 @@ function _histAgAccRenderDaysList() {
     const totalEl = document.getElementById('hist-agacc-period-total');
     const listEl = document.getElementById('hist-agacc-days-list');
     if (!period) { if (totalEl) totalEl.textContent = ''; if (listEl) listEl.innerHTML = ''; _histAgAccRenderTable(null); return; }
-    if (totalEl) totalEl.textContent = '💰 Total période : ' + period.ca.toFixed(2) + ' €';
+    if (totalEl) {
+        totalEl.textContent = '💰 Total période : ' + period.ca.toFixed(2) + ' €';
+        const pp = period.pay || _histPayEmpty();
+        const lines = _HIST_PAY_CATS.filter(function(c) { return Math.abs(pp[c.k]) > 0.004; }).map(function(c) {
+            return '<div><span style="color:var(--text-muted,#777);font-weight:600;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + c.color + ';margin-right:6px;"></span>' + c.icon + ' ' + c.label + '</span><b>' + _histPayFmt(pp[c.k]) + '</b></div>';
+        }).join('');
+        let box = document.getElementById('hist-agacc-period-pay');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'hist-agacc-period-pay';
+            box.className = 'hist-pay-ptot';
+            totalEl.parentNode.insertBefore(box, totalEl.nextSibling);
+        }
+        box.innerHTML = lines + (pp.points > 0.004 ? '<div><span style="color:var(--text-muted,#777);font-weight:600;">🎁 Remises points</span><b style="color:var(--text-muted,#777);">−' + _histPayFmt(pp.points) + '</b></div>' : '');
+        box.style.display = lines ? 'flex' : 'none';
+    }
 
     const dayKeys = Object.keys(period.days).sort().reverse();
     if (!window._histAgAccDayKeySel || !period.days[window._histAgAccDayKeySel]) {
@@ -1421,9 +1523,12 @@ function _histAgAccRenderDaysList() {
         listEl.innerHTML = dayKeys.map(function(dk) {
             const day = period.days[dk];
             const isSel = dk === window._histAgAccDayKeySel;
-            return '<div onclick="_histAgAccSelectDay(\'' + dk + '\')" style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 10px;border-radius:8px;cursor:pointer;background:' + (isSel ? 'rgba(52,152,219,0.12)' : 'transparent') + ';border:1.5px solid ' + (isSel ? '#3498db' : 'transparent') + ';">'
+            return '<div onclick="_histAgAccSelectDay(\'' + dk + '\')" title="' + _histEscape(_histPayTitle(day.pay || _histPayEmpty())) + '" style="padding:7px 10px;border-radius:8px;cursor:pointer;background:' + (isSel ? 'rgba(52,152,219,0.12)' : 'transparent') + ';border:1.5px solid ' + (isSel ? '#3498db' : 'transparent') + ';">'
+                + '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">'
                 + '<span style="font-size:0.78rem;font-weight:' + (isSel ? '800' : '600') + ';color:var(--text-main,#2c3e50);">' + _histEscape(new Date(dk + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' })) + '</span>'
                 + '<span style="font-size:0.76rem;font-weight:700;color:#059669;">' + day.ca.toFixed(2) + ' €</span>'
+                + '</div>'
+                + _histPayBarHtml(day.pay || _histPayEmpty(), 'hist-pay-mini')
                 + '</div>';
         }).join('');
     }
@@ -1431,6 +1536,7 @@ function _histAgAccRenderDaysList() {
 }
 
 function _histAgAccSelectDay(dk) {
+    if (window._histAgAccDayKeySel !== dk) window._histAgAccPayFilter = null;
     window._histAgAccDayKeySel = dk;
     _histAgAccRenderDaysList();
 }
@@ -1443,7 +1549,9 @@ function _histAgAccRenderTable(dayKey) {
     const periods = window._histAgAccData || {};
     const period = periods[window._histAgAccPeriodKeySel];
     const day = (dayKey && period) ? period.days[dayKey] : null;
+    const payEl = document.getElementById('hist-agacc-pay');
     if (!day) {
+        if (payEl) payEl.innerHTML = '';
         if (titleEl) titleEl.textContent = '—';
         bodyEl.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted,#999);">Sélectionnez un jour à gauche.</td></tr>';
         return;
@@ -1458,7 +1566,35 @@ function _histAgAccRenderTable(dayKey) {
             : s.method==='points' ? '🎁 Points'
             : '💳💶 Mixte';
     };
-    const rows = day.sales.slice().sort(function(a, b){ return new Date(b.date) - new Date(a.date); }).map(function(s) {
+    // Répartition du jour par mode de paiement — un clic sur une puce filtre le tableau
+    const pay = day.pay || _histPayEmpty();
+    const filt = window._histAgAccPayFilter || null;
+    const cats = _HIST_PAY_CATS.filter(function(c) { return Math.abs(pay[c.k]) > 0.004; });
+    if (payEl) {
+        const posSum = cats.reduce(function(a, c) { return a + Math.max(0, pay[c.k]); }, 0);
+        payEl.innerHTML = cats.length ? (_histPayBarHtml(pay, 'hist-pay-bar')
+            + '<div class="hist-pay-chips">' + cats.map(function(c) {
+                const pct = (posSum > 0 && pay[c.k] > 0) ? Math.round(pay[c.k] / posSum * 100) + ' % · ' : '';
+                const nb = pay.n[c.k] || 0;
+                return '<button type="button" class="hist-pay-chip' + (filt === c.k ? ' on' : '') + '" data-pay="' + c.k + '" style="--pc:' + c.color + ';" onclick="_histAgAccSetPayFilter(\'' + c.k + '\')" title="Afficher uniquement les tickets ' + c.label + '">'
+                    + '<span class="hp-dot"></span><span><span class="hp-lbl">' + c.icon + ' ' + c.label + '</span><br><span class="hp-amt">' + _histPayFmt(pay[c.k]) + '</span> <span class="hp-sub">' + pct + nb + ' ticket' + (nb > 1 ? 's' : '') + '</span></span></button>';
+            }).join('') + '</div>'
+            + '<div class="hist-pay-info">' + (filt ? ('Filtre : ' + _HIST_PAY_CATS.find(function(c) { return c.k === filt; }).label + ' — <a href="#" onclick="_histAgAccSetPayFilter(null);return false;" style="color:#2563eb;font-weight:700;">tout afficher</a>') : 'Cliquez sur un mode pour n\'afficher que ses tickets.')
+            + (pay.points > 0.004 ? ' · 🎁 Remises points : −' + _histPayFmt(pay.points) + ' (non encaissées)' : '') + '</div>') : '';
+    }
+    const payDetailOf = function(s) {
+        if (s.cancelled || s.type === 'retour_article') return '';
+        const sp = _histPaySplit(s);
+        const parts = _HIST_PAY_CATS.filter(function(c) { return Math.abs(sp[c.k]) > 0.004; });
+        if (parts.length < 2 && s.method !== 'mixed') return '';
+        return '<span class="hist-pay-detail">' + parts.map(function(c) { return c.icon + ' ' + sp[c.k].toFixed(2) + ' €'; }).join(' + ') + '</span>';
+    };
+    const shown = day.sales.filter(function(s) {
+        if (!filt) return true;
+        if (s.cancelled) return false;
+        return Math.abs(_histPaySplit(s)[filt]) > 0.004;
+    });
+    const rows = shown.slice().sort(function(a, b){ return new Date(b.date) - new Date(a.date); }).map(function(s) {
         const idx = (window._sortedSalesHistory || []).findIndex(function(x){ return x.id === s.id; });
         const clickable = idx >= 0;
         const heure = new Date(s.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -1467,12 +1603,19 @@ function _histAgAccRenderTable(dayKey) {
         return '<tr ' + (clickable ? ('onclick="showTicketFromHistory(' + idx + ')" title="Voir le ticket"') : '') + ' style="' + rowStyle + 'border-top:1px solid var(--border-color,#eee);">'
             + '<td style="padding:7px 10px;">🧾 #' + s.id + (s.cancelled ? ' 🚫' : '') + (s.ticketNum != null ? '<br><span style="font-size:0.65rem;color:var(--text-muted,#aaa);">n° caisse : ' + s.ticketNum + '</span>' : '') + '</td>'
             + '<td style="padding:7px 10px;">' + heure + '</td>'
-            + '<td style="padding:7px 10px;white-space:nowrap;">' + methodLabelOf(s) + '</td>'
+            + '<td style="padding:7px 10px;white-space:nowrap;">' + (s.type === 'retour_article' ? '↩️ Retour' : methodLabelOf(s)) + payDetailOf(s) + '</td>'
             + '<td style="padding:7px 10px;">' + client + '</td>'
             + '<td style="padding:7px 10px;text-align:right;font-weight:700;">' + parseFloat(s.total || 0).toFixed(2) + ' €</td>'
             + '</tr>';
     }).join('');
-    bodyEl.innerHTML = rows || '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted,#999);">Aucune vente ce jour.</td></tr>';
+    bodyEl.innerHTML = rows || '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted,#999);">' + (filt ? 'Aucun ticket pour ce mode de paiement.' : 'Aucune vente ce jour.') + '</td></tr>';
+}
+
+// Filtre du tableau du jour par mode de paiement (re-clic sur la même puce = tout afficher)
+window._histAgAccPayFilter = null;
+function _histAgAccSetPayFilter(k) {
+    window._histAgAccPayFilter = (k && window._histAgAccPayFilter !== k) ? k : null;
+    _histAgAccRenderTable(window._histAgAccDayKeySel);
 }
 
 // ===== HISTORIQUE VENTES — KPI + GRAPHIQUES =====
