@@ -3243,3 +3243,188 @@ window.cpMaybeShowInstallBanner = function(){
 </script>
 </body>
 </html>
+<script>
+/* ════════════════════════════════════════════════════════════════════════
+   HISTORIQUE PRO — RÈGLEMENTS DE FACTURES DANS L'HISTORIQUE DES VENTES
+   Les règlements enregistrés sur les factures (Gestion Pro → Devis / Factures) apparaissent
+   dans l'historique des ventes, À LEUR DATE, avec l'état de paiement de la facture :
+     ✅ Facture soldée  ·  🟡 Paiement partiel (reste à payer)
+   • règlement « sans ticket » : carte dédiée dans la liste
+   • règlement rattaché à un ticket : carte dédiée à la date du règlement + rappel sur le ticket
+   • filtre « 🧾 Règlements de factures » (Statut) + tuile de synthèse, recherche par n° de facture
+     ou client, filtres date / agenda / mode de paiement respectés
+   Lecture seule : covo_sales_history et covo_devis ne sont jamais modifiés ; les chiffres
+   d'affaires des tickets restent identiques (pas de double comptage).
+   ════════════════════════════════════════════════════════════════════════ */
+(function () {
+    'use strict';
+    if (window._histFactInstalled) return;
+    window._histFactInstalled = true;
+    function $(id) { return document.getElementById(id); }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function num(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+    function eur(n) { return num(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
+    function dkey(d) { var x = new Date(d); if (isNaN(x)) return ''; return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); }
+    var MODES = { especes: ['💵', 'Espèces'], cb: ['💳', 'Carte'], mixte: ['🔀', 'Mixte'], credit: ['🏦', 'Crédit'], compte: ['📒', 'À compte'] };
+    var METHOD_MAP = { cash: ['especes'], cb: ['cb'], mixed: ['mixte'], credit: ['credit', 'compte'] };
+
+    /* Tous les règlements, avec l'état de la facture JUSTE APRÈS chacun (cumul chronologique) */
+    function payments() {
+        var L; try { L = JSON.parse(localStorage.getItem('covo_devis') || '[]'); } catch (e) { L = []; }
+        if (!Array.isArray(L)) return [];
+        var out = [];
+        L.forEach(function (d) {
+            if (!d || !Array.isArray(d.paiements) || !d.paiements.length) return;
+            var total = num(d.totalTTC), cum = 0;
+            var P = d.paiements.filter(function (p) { return p && !isNaN(new Date(p.date)); }).slice().sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
+            var paidAll = P.reduce(function (a, p) { return a + num(p.montant); }, 0);
+            P.forEach(function (p, i) {
+                cum = Math.round((cum + num(p.montant)) * 100) / 100;
+                var reste = Math.max(0, Math.round((total - cum) * 100) / 100);
+                out.push({
+                    d: d, p: p, n: i + 1, count: P.length, t: new Date(p.date).getTime(), montant: num(p.montant), total: total, cum: cum, reste: reste,
+                    solde: total > 0 ? reste <= 0.004 : true,
+                    resteNow: Math.max(0, Math.round((total - paidAll) * 100) / 100)
+                });
+            });
+        });
+        return out.sort(function (a, b) { return b.t - a.t; });
+    }
+    function filters() {
+        return {
+            q: ($('cashier-hist-search') && $('cashier-hist-search').value || '').toLowerCase().trim(),
+            method: $('cashier-hist-method') ? $('cashier-hist-method').value : '',
+            status: $('cashier-hist-status') ? $('cashier-hist-status').value : '',
+            loyalty: $('cashier-hist-loyalty') ? $('cashier-hist-loyalty').value : '',
+            date: $('cashier-hist-date') ? $('cashier-hist-date').value : ''
+        };
+    }
+    function visible(x, f) {
+        if (f.status === 'cancelled' || f.loyalty === 'with') return false;
+        if (f.method) { var ok = METHOD_MAP[f.method]; if (!ok || ok.indexOf(x.p.mode || 'especes') < 0) return false; }
+        var k = dkey(x.t);
+        if (f.date) { if (k !== f.date) return false; }
+        else if (window._histAgendaRange) { var r = window._histAgendaRange; if (k < r.start || k > r.end) return false; }
+        if (window._histTimeFilter === 'today' && k !== dkey(Date.now())) return false;
+        if (f.q) {
+            var hay = ['facture', 'règlement', 'reglement', x.d.numero, x.d.client && x.d.client.nom, x.d.client && x.d.client.email, x.p.createdBy, x.p.ticketNumero, x.p.ticketId].join(' ').toLowerCase();
+            if (hay.indexOf(f.q.replace(/^#/, '')) < 0) return false;
+        }
+        return true;
+    }
+    function stateBadge(x) {
+        return x.solde
+            ? '<span class="hf-st ok">✅ Facture soldée</span>'
+            : '<span class="hf-st part">🟡 Paiement partiel · reste ' + eur(x.reste) + '</span>';
+    }
+    function card(x) {
+        var d = x.d, p = x.p, m = MODES[p.mode] || MODES.especes;
+        var dateStr = new Date(x.t).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        var pct = x.total > 0 ? Math.min(100, x.cum / x.total * 100) : 100;
+        var split = p.mode === 'mixte' ? ' (💵 ' + eur(p.montantEspeces) + ' + 💳 ' + eur(p.montantCB) + ')' : '';
+        var others = x.count > 1 ? '<details class="hf-more"><summary>Tous les règlements de cette facture (' + x.count + ')</summary>' + allRows(d) + '</details>' : '';
+        return '<div class="cashier-ticket-card hf-card' + (x.solde ? ' ok' : ' part') + '" data-hf="' + esc(d.id) + '">'
+            + '<div class="ticket-header"><div><span class="hf-num">🧾 Règlement facture ' + esc(d.numero || '?') + '</span>' + stateBadge(x) + '</div>'
+            + '<span class="ticket-total hf-amt">+' + eur(x.montant) + '</span></div>'
+            + '<div class="ticket-meta"><span>📅 ' + dateStr + '</span><span>👤 ' + esc(p.createdBy || '-') + '</span><span>' + m[0] + ' ' + m[1] + split + '</span>'
+            + '<span>' + (p.ticketId ? '🔗 Ajouté au ticket n° ' + esc(p.ticketNumero || p.ticketId) : '🧾 Sans ticket de caisse') + '</span>'
+            + (x.count > 1 ? '<span>Règlement ' + x.n + '/' + x.count + '</span>' : '') + '</div>'
+            + '<div class="hf-line">' + (d.client && d.client.nom ? '👤 <b>' + esc(d.client.nom) + '</b> · ' : '') + 'Facture ' + eur(x.total) + ' · réglé ' + eur(x.cum) + (x.solde ? '' : ' · <b>reste ' + eur(x.reste) + '</b>') + '</div>'
+            + '<div class="hf-bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>'
+            + (!x.solde && x.n === x.count ? '' : (!x.solde && x.resteNow <= 0.004 ? '<div class="hf-note">✅ Facture soldée depuis par un règlement suivant</div>' : ''))
+            + others + '</div>';
+    }
+    function allRows(d) {
+        var total = num(d.totalTTC), cum = 0;
+        return '<table class="hf-tbl"><tbody>' + (d.paiements || []).slice().sort(function (a, b) { return new Date(a.date) - new Date(b.date); }).map(function (p) {
+            cum += num(p.montant); var m = MODES[p.mode] || MODES.especes, r = Math.max(0, total - cum);
+            return '<tr><td>' + new Date(p.date).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) + '</td><td>' + m[0] + ' ' + m[1] + '</td><td class="r"><b>+' + eur(p.montant) + '</b></td><td class="r">' + (r <= 0.004 ? '✅ soldée' : 'reste ' + eur(r)) + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    }
+
+    var CSS = [
+        '.hf-card{border-left:4px solid #f59e0b!important;}',
+        '.hf-card.ok{border-left-color:#16a34a!important;}',
+        '.hf-num{font-weight:800;color:#7c3aed;}',
+        '.hf-st{display:inline-block;margin-left:6px;font-size:.68rem;font-weight:800;padding:1px 8px;border-radius:10px;vertical-align:1px;}',
+        '.hf-st.ok{background:#dcfce7;color:#166534;}.hf-st.part{background:#fef3c7;color:#92400e;}',
+        'body.dark-mode .hf-st.ok{background:rgba(22,163,74,.22);color:#86efac;}body.dark-mode .hf-st.part{background:rgba(245,158,11,.2);color:#fcd34d;}',
+        '.hf-amt{color:#7c3aed!important;text-decoration:none!important;}',
+        '.hf-line{font-size:.78rem;margin-top:6px;color:var(--text-main);}',
+        '.hf-bar{height:5px;border-radius:3px;background:var(--border-color,#e5e7eb);margin-top:6px;overflow:hidden;}.hf-bar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#f59e0b,#16a34a);}',
+        '.hf-card.ok .hf-bar i{background:#16a34a;}',
+        '.hf-note{font-size:.72rem;color:#16a34a;font-weight:700;margin-top:4px;}',
+        '.hf-more{margin-top:6px;font-size:.75rem;}.hf-more summary{cursor:pointer;color:#7c3aed;font-weight:700;}',
+        '.hf-tbl{width:100%;border-collapse:collapse;margin-top:4px;}.hf-tbl td{padding:4px 6px;border-bottom:1px solid var(--border-color,#eee);}.hf-tbl td.r{text-align:right;}',
+        '.hf-tk{margin-top:6px;padding:6px 10px;background:rgba(124,58,237,.08);border-radius:8px;font-size:.74rem;color:#6d28d9;font-weight:700;}',
+        'body.dark-mode .hf-tk{color:#c4b5fd;}',
+        '.cashier-hist-stat.hf-stat h4{color:#7c3aed;}'
+    ].join('\n');
+
+    function enhance() {
+        if (!$('hf-css')) { var st = document.createElement('style'); st.id = 'hf-css'; st.textContent = CSS; document.head.appendChild(st); }
+        var listEl = $('cashier-hist-list'); if (!listEl) return;
+        var f = filters(), all = payments(), vis = all.filter(function (x) { return visible(x, f); });
+        // 1) rappel sur les tickets auxquels un règlement a été ajouté
+        var byTicket = {};
+        all.forEach(function (x) { if (x.p.ticketId != null) (byTicket[String(x.p.ticketId)] = byTicket[String(x.p.ticketId)] || []).push(x); });
+        var sorted = window._sortedSalesHistory || [];
+        var cards = [].slice.call(listEl.querySelectorAll(':scope > .cashier-ticket-card:not(.hf-card)'));
+        if (f.status === 'factures') { cards.forEach(function (c) { c.remove(); }); cards = []; }
+        cards.forEach(function (c, i) {
+            var s = sorted[i]; if (!s) return;
+            var L = byTicket[String(s.id)]; if (!L || c.querySelector('.hf-tk')) return;
+            var div = document.createElement('div'); div.className = 'hf-tk';
+            div.innerHTML = L.map(function (x) { return '🧾 Règlement facture ' + esc(x.d.numero || '?') + ' : +' + eur(x.montant) + ' le ' + new Date(x.t).toLocaleDateString('fr-FR') + ' — ' + (x.solde ? '✅ soldée' : '🟡 partiel, reste ' + eur(x.reste)); }).join('<br>');
+            c.appendChild(div);
+        });
+        // 2) cartes « Règlement facture » à leur date, intercalées entre les tickets
+        if (!vis.length) {
+            if (f.status === 'factures') listEl.innerHTML = '<div style="text-align:center;padding:40px;color:#7f8c8d;"><div style="font-size:2.5rem;">🧾</div><h3 style="margin:8px 0 4px;">Aucun règlement de facture</h3><p style="font-size:0.83rem;">Les règlements enregistrés dans Gestion Pro → Factures apparaîtront ici à leur date.</p></div>';
+            return;
+        }
+        if (!cards.length && !listEl.querySelector('.cashier-ticket-card')) listEl.innerHTML = '';
+        var ci = 0;
+        vis.forEach(function (x) {
+            while (ci < cards.length && sorted[ci] && new Date(sorted[ci].date).getTime() > x.t) ci++;
+            var tmp = document.createElement('div'); tmp.innerHTML = card(x); var el = tmp.firstChild;
+            if (ci < cards.length) listEl.insertBefore(el, cards[ci]); else listEl.appendChild(el);
+        });
+    }
+    function stats() {
+        var statsEl = $('cashier-hist-stats'); if (!statsEl || statsEl.querySelector('.hf-stat')) return;
+        var all = payments(); if (!all.length) return;
+        var tot = all.reduce(function (a, x) { return a + x.montant; }, 0);
+        var today = dkey(Date.now()), tdy = all.filter(function (x) { return dkey(x.t) === today; });
+        var on = $('cashier-hist-status') && $('cashier-hist-status').value === 'factures';
+        var el = document.createElement('div');
+        el.className = 'cashier-hist-stat hf-stat' + (on ? ' active-filter' : '');
+        el.title = 'Afficher uniquement les règlements de factures';
+        el.innerHTML = '<h4>' + eur(tot) + '</h4><p>Règlements factures 🧾 (' + all.length + ')</p><div class="stat-filter-hint">' + (tdy.length ? 'Aujourd’hui : ' + eur(tdy.reduce(function (a, x) { return a + x.montant; }, 0)) : '🔽 Cliquer pour filtrer') + '</div>';
+        el.addEventListener('click', function () {
+            var s = $('cashier-hist-status'); if (!s) return;
+            s.value = s.value === 'factures' ? '' : 'factures';
+            if (typeof filterCashierHistory === 'function') filterCashierHistory(($('cashier-hist-search') || {}).value || '');
+        });
+        statsEl.appendChild(el);
+    }
+    function boot() {
+        if (typeof window.renderCashierHistory !== 'function' || !$('cashier-hist-list')) { if ((boot.n = (boot.n || 0) + 1) < 400) setTimeout(boot, 300); return; }
+        // option de filtre « Règlements de factures »
+        var sel = $('cashier-hist-status');
+        if (sel && !sel.querySelector('option[value="factures"]')) { var o = document.createElement('option'); o.value = 'factures'; o.textContent = '🧾 Règlements de factures'; sel.appendChild(o); }
+        var orig = window.renderCashierHistory;
+        window.renderCashierHistory = function () {
+            var r = orig.apply(this, arguments);
+            try { stats(); enhance(); } catch (e) { console.warn('[Règlements factures]', e); }
+            return r;
+        };
+        // mise à jour quand une facture est réglée dans Gestion Pro (même appareil) ou restaurée
+        window.addEventListener('storage', function (e) {
+            if (e.key === 'covo_devis' && typeof filterCashierHistory === 'function') filterCashierHistory(($('cashier-hist-search') || {}).value || '');
+        });
+        try { if (typeof filterCashierHistory === 'function') filterCashierHistory(($('cashier-hist-search') || {}).value || ''); else window.renderCashierHistory(); } catch (e) {}
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+})();
+</script>
